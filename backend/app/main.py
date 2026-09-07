@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     """Application startup and shutdown lifespan events."""
     settings = get_settings()
     logger.info("Starting FactLens Application API...")
-    logger.info(f"Environment: {settings.environment} | Embeddings: {settings.embedding_dimension}-d")
+    logger.info(f"Environment: {settings.app_env} | Embeddings: {settings.embedding_dimension}-d")
     logger.info(f"LLM Provider: {settings.llm_provider} (Fallback: {settings.llm_fallback_enabled})")
     yield
     logger.info("Shutting down FactLens Application API...")
