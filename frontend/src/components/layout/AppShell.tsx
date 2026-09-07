@@ -15,6 +15,7 @@ export function AppShell() {
   const [isDark, setIsDark] = useState<boolean>(true);
   const [isUploadOpen, setIsUploadOpen] = useState<boolean>(false);
   const [datasets, setDatasets] = useState<DatasetResponse[]>([]);
+  const [selectedDatasetId, setSelectedDatasetId] = useState<string>("all");
   const [inspectFactId, setInspectFactId] = useState<string | null>(null);
 
   // Sync dark class on html root
@@ -29,7 +30,14 @@ export function AppShell() {
 
   const fetchDatasets = () => {
     api.getDatasets()
-      .then(setDatasets)
+      .then((data) => {
+        setDatasets(data);
+        // If current selection is invalid or only one dataset exists, stay smart
+        if (data.length > 0 && selectedDatasetId !== "all") {
+          const exists = data.some((d) => d.id === selectedDatasetId);
+          if (!exists) setSelectedDatasetId("all");
+        }
+      })
       .catch((err) => console.error("Error loading datasets:", err));
   };
 
@@ -37,7 +45,12 @@ export function AppShell() {
     fetchDatasets();
   }, []);
 
-  const activeDataset = datasets[0];
+  const activeDataset = datasets.find((d) => d.id === selectedDatasetId);
+  const totalDocs = datasets.reduce((sum, d) => sum + (d.document_count || 0), 0);
+  const totalFacts = datasets.reduce((sum, d) => sum + (d.fact_count || 0), 0);
+  const totalRelationships = datasets.reduce((sum, d) => sum + (d.relationship_count || 0), 0);
+
+  const currentDatasetId = selectedDatasetId === "all" ? undefined : selectedDatasetId;
 
   const handleInspectFact = (factId: string) => {
     setInspectFactId(factId);
@@ -55,15 +68,19 @@ export function AppShell() {
         }}
         isDark={isDark}
         onToggleTheme={() => setIsDark(!isDark)}
-        documentCount={activeDataset?.document_count || 0}
-        factCount={activeDataset?.fact_count || 0}
-        relationshipCount={activeDataset?.relationship_count || 0}
+        documentCount={activeDataset ? activeDataset.document_count : totalDocs}
+        factCount={activeDataset ? activeDataset.fact_count : totalFacts}
+        relationshipCount={activeDataset ? activeDataset.relationship_count : totalRelationships}
       />
 
       {/* Main Content Area */}
       <div className="flex-1 flex flex-col min-w-0">
         <Header
-          datasetName={activeDataset?.name || "Delhivery Financials"}
+          datasetName={activeDataset?.name}
+          datasets={datasets}
+          selectedDatasetId={selectedDatasetId}
+          totalFacts={totalFacts}
+          onSelectDataset={(id) => setSelectedDatasetId(id)}
           onOpenUpload={() => setIsUploadOpen(true)}
           onOpenCases={() => setActiveView("cases")}
         />
@@ -79,21 +96,21 @@ export function AppShell() {
           {activeView === "documents" && (
             <DocumentsView
               onOpenUpload={() => setIsUploadOpen(true)}
-              datasetId={activeDataset?.id}
+              datasetId={currentDatasetId}
               onRefreshCounts={fetchDatasets}
             />
           )}
 
           {activeView === "facts" && (
             <FactsView
-              datasetId={activeDataset?.id}
+              datasetId={currentDatasetId}
               initialFactId={inspectFactId}
             />
           )}
 
           {activeView === "relationships" && (
             <RelationshipsView
-              datasetId={activeDataset?.id}
+              datasetId={currentDatasetId}
               onInspectFact={handleInspectFact}
             />
           )}
