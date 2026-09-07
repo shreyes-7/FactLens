@@ -61,6 +61,8 @@ class DocumentDetailResponse(DocumentResponse):
     """Detailed document record including processing run metrics."""
     total_facts_extracted: int = 0
     total_chunks: int = 0
+    extracted_page_numbers: list[int] = []
+    extracted_pages_count: int = 0
     processing_runs: list[dict[str, Any]] = []
 
 

@@ -61,6 +61,8 @@ export interface ProcessingRunItem {
 export interface DocumentDetailResponse extends DocumentResponse {
   total_facts_extracted: number;
   total_chunks: number;
+  extracted_page_numbers?: number[];
+  extracted_pages_count?: number;
   processing_runs: ProcessingRunItem[];
 }
 

@@ -1,4 +1,4 @@
-import { Github, Mail, ShieldCheck } from "lucide-react";
+import { Github, Mail, ShieldCheck, Zap } from "lucide-react";
 
 export function Footer() {
   return (
@@ -7,8 +7,8 @@ export function Footer() {
         {/* Brand & Author */}
         <div className="flex flex-col sm:flex-row items-center gap-2 sm:gap-4 text-center sm:text-left">
           <div className="flex items-center gap-2">
-            <div className="h-5 w-5 rounded-md bg-gradient-to-br from-violet-600/30 to-sky-500/20 border border-violet-500/30 flex items-center justify-center p-0.5 shadow-sm">
-              <img src="/vite.svg" alt="Logo" className="h-3.5 w-3.5 object-contain" />
+            <div className="h-6 w-6 rounded-md bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+              <Zap className="h-3.5 w-3.5 fill-primary/30" />
             </div>
             <span className="font-semibold text-foreground tracking-tight">FactLens</span>
             <span className="text-[10px] font-mono px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/40">

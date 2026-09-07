@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Play, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
 import { api } from "@/api/client";
 import { Dialog } from "@/components/ui/dialog";
@@ -27,10 +27,27 @@ export function ProcessOptionsModal({
   onProcessSuccess,
   onStartProcess,
 }: ProcessOptionsModalProps) {
-  const [maxPages, setMaxPages] = useState<number>(5);
+  const [maxPages, setMaxPages] = useState<number>(3);
+  const [extractedPagesCount, setExtractedPagesCount] = useState<number | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successInfo, setSuccessInfo] = useState<string | null>(null);
+
+  // Fetch document details to know how many pages are already extracted
+  useEffect(() => {
+    if (isOpen && documentId) {
+      api.getDocumentDetail(documentId)
+        .then((doc) => {
+          if (doc) {
+            setExtractedPagesCount(doc.extracted_pages_count ?? 0);
+          }
+        })
+        .catch(() => setExtractedPagesCount(0));
+    }
+  }, [isOpen, documentId]);
+
+  const alreadyExtracted = extractedPagesCount ?? 0;
+  const remainingPages = Math.max(0, pageCount - alreadyExtracted);
 
   const handleStartProcessing = async () => {
     // If caller provided onStartProcess, immediately close dialog and delegate to background task
@@ -55,7 +72,7 @@ export function ProcessOptionsModal({
           chunk_size: 800,
           chunk_overlap: 100,
         },
-        false // synchronous execution so user sees facts extracted immediately
+        false // synchronous execution
       );
       setSuccessInfo(
         `Extracted ${resp.facts_extracted} grounded facts across ${resp.chunks_created} chunks.`
@@ -72,37 +89,67 @@ export function ProcessOptionsModal({
     }
   };
 
+  const pageOptions = remainingPages > 0
+    ? Array.from(new Set([
+        Math.min(3, remainingPages),
+        Math.min(5, remainingPages),
+        Math.min(10, remainingPages),
+        remainingPages,
+      ])).filter((n) => n > 0).sort((a, b) => a - b)
+    : [3, 5, 10, pageCount];
+
   return (
     <Dialog
       isOpen={isOpen}
       onClose={onClose}
       title="Extract Facts & Ground Evidence"
-      description={`Run the chunking, embedding, LLM extraction, and evidence grounding pipeline for '${filename}'.`}
+      description={`Extract grounded claims from '${filename}'. Targets pages with no extracted facts.`}
     >
       <div className="space-y-4 pt-2">
         {/* Page selection */}
         <div>
-          <label className="text-xs font-semibold text-foreground/90 block mb-1.5">
-            Pages to Process (Total: {pageCount} pages available)
-          </label>
+          <div className="flex items-center justify-between mb-1.5">
+            <label className="text-xs font-semibold text-foreground/90">
+              Pages to Extract
+            </label>
+            <span className="text-[11px] font-mono text-muted-foreground">
+              {alreadyExtracted > 0 ? (
+                <>
+                  <b className="text-foreground">{alreadyExtracted}</b>/{pageCount} extracted ({remainingPages} unextracted remaining)
+                </>
+              ) : (
+                `Total: ${pageCount} pages available`
+              )}
+            </span>
+          </div>
+
           <div className="grid grid-cols-4 gap-2">
-            {[3, 5, 10, pageCount].map((pages) => (
+            {pageOptions.map((pages) => (
               <button
                 key={pages}
                 type="button"
                 onClick={() => setMaxPages(pages)}
-                className={`py-2 px-3 rounded-lg border text-xs font-medium transition-all ${
+                className={`py-2 px-2.5 rounded-lg border text-xs font-medium transition-all text-center ${
                   maxPages === pages
                     ? "border-primary bg-primary/10 text-primary font-semibold shadow-sm"
                     : "border-border hover:bg-muted text-muted-foreground"
                 }`}
               >
-                {pages === pageCount ? `All (${pages})` : `${pages} pages`}
+                {remainingPages > 0 && pages === remainingPages
+                  ? `All ${pages} rem.`
+                  : pages === pageCount
+                  ? `All (${pages})`
+                  : `${pages} pages`}
               </button>
             ))}
           </div>
-          <p className="text-[11px] text-muted-foreground mt-1.5">
-            Processing 3–5 pages completes in ~8 seconds; larger batches run with rate-limit handling.
+          <p className="text-[11px] text-muted-foreground mt-1.5 flex items-center gap-1">
+            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span>
+              {remainingPages > 0
+                ? "Smart selection automatically targets unextracted pages, skipping pages that already have facts."
+                : "All pages already have facts extracted. Selecting pages will re-analyze from start."}
+            </span>
           </p>
         </div>
 

@@ -67,7 +67,7 @@ export function AppShell() {
       id: documentId,
       type: "extraction",
       title: `Extracting facts from ${filename}`,
-      subtitle: `Processing ${maxPages} pages with Gemini 2.5 Flash & Groq fallback...`,
+      subtitle: `Processing ${maxPages} unextracted page(s)... Running chunk batching & evidence grounding.`,
       status: "running",
     });
 

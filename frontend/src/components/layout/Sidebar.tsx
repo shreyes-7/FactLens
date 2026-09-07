@@ -8,6 +8,7 @@ import {
   Sun,
   Moon,
   ShieldCheck,
+  Zap,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { HealthResponse } from "@/api/types";
@@ -82,18 +83,18 @@ export function Sidebar({
       <div>
         {/* Brand Header */}
         <div className="p-5 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600/20 via-sky-500/15 to-purple-600/30 border border-violet-500/40 flex items-center justify-center p-1.5 shadow-md shadow-violet-500/20">
-              <img src="/vite.svg" alt="FactLens Emblem" className="h-6 w-6 object-contain filter drop-shadow-[0_2px_8px_rgba(189,52,254,0.4)]" />
+          <div className="flex items-center gap-2.5">
+            <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary shadow-sm">
+              <Zap className="h-4 w-4 fill-primary/30" />
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
                 FactLens
-                <span className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
+                <span className="text-[10px] font-mono font-normal px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/50">
                   v0.1
                 </span>
               </h1>
-              <p className="text-[10px] text-muted-foreground truncate font-medium">
+              <p className="text-[10px] text-muted-foreground truncate">
                 Evidence Fact Knowledge Layer
               </p>
             </div>

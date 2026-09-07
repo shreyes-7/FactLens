@@ -108,10 +108,6 @@ export function OverviewView({
             <RefreshCw className={`h-3 w-3 mr-1.5 ${loading ? "animate-spin text-primary" : ""}`} />
             Refresh
           </Button>
-          <Button size="sm" onClick={onOpenUpload} className="h-8 text-xs font-semibold shadow-sm">
-            <Upload className="h-3.5 w-3.5 mr-1.5" />
-            Upload PDF
-          </Button>
         </div>
       </div>
 

@@ -100,10 +100,25 @@ class ProcessingService:
         if page_numbers is not None and len(page_numbers) > 0:
             target_set = set(page_numbers)
             pages_to_process = [p for p in all_pages if p.get("pdf_page_number") in target_set]
-        else:
+        elif page_offset > 0:
             pages_to_process = all_pages[page_offset:]
             if max_pages is not None:
                 pages_to_process = pages_to_process[:max_pages]
+        else:
+            # Smart unextracted page selection: extract from pages where facts have NOT yet been extracted
+            extracted_pages = self._get_already_extracted_page_numbers(str(doc_uuid))
+            unextracted_pages = [p for p in all_pages if p.get("pdf_page_number") not in extracted_pages]
+            if unextracted_pages:
+                logger.info(
+                    f"Document '{filename}': {len(extracted_pages)}/{len(all_pages)} pages already extracted. "
+                    f"Selecting next {max_pages or len(unextracted_pages)} unextracted page(s)..."
+                )
+                pages_to_process = unextracted_pages[:max_pages] if max_pages is not None else unextracted_pages
+            else:
+                logger.info(
+                    f"Document '{filename}': All {len(all_pages)} pages already extracted. Processing from beginning."
+                )
+                pages_to_process = all_pages[:max_pages] if max_pages is not None else all_pages
 
         # Initialize processing run
         run_id = self._create_processing_run(str(doc_uuid))
@@ -309,6 +324,28 @@ class ProcessingService:
                     (document_id,),
                 )
                 return cur.fetchone()
+        finally:
+            conn.close()
+
+    def _get_already_extracted_page_numbers(self, document_id: str) -> set[int]:
+        """Return set of pdf_page_numbers that already have facts or chunks extracted."""
+        conn = get_db_connection(self.settings)
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT DISTINCT dp.pdf_page_number
+                    FROM public.document_pages dp
+                    WHERE dp.document_id = %s
+                      AND (
+                        dp.id IN (SELECT page_id FROM public.evidence WHERE document_id = %s)
+                        OR dp.id IN (SELECT page_id FROM public.chunks WHERE document_id = %s)
+                      );
+                    """,
+                    (document_id, document_id, document_id),
+                )
+                rows = cur.fetchall()
+                return {int(r[0]) for r in rows if r[0] is not None}
         finally:
             conn.close()
 

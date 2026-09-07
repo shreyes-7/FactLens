@@ -774,6 +774,24 @@ def get_document_detail(document_id: str, settings: Settings | None = None) -> d
             cur.execute("SELECT COUNT(*) AS total FROM public.chunks WHERE document_id = %s;", (document_id,))
             res["total_chunks"] = cur.fetchone()["total"]
 
+            # Extracted pages tracking
+            cur.execute(
+                """
+                SELECT DISTINCT dp.pdf_page_number
+                FROM public.document_pages dp
+                WHERE dp.document_id = %s
+                  AND (
+                    dp.id IN (SELECT page_id FROM public.evidence WHERE document_id = %s)
+                    OR dp.id IN (SELECT page_id FROM public.chunks WHERE document_id = %s)
+                  )
+                ORDER BY dp.pdf_page_number;
+                """,
+                (document_id, document_id, document_id),
+            )
+            extracted_pages = [r["pdf_page_number"] for r in cur.fetchall() if r["pdf_page_number"] is not None]
+            res["extracted_page_numbers"] = extracted_pages
+            res["extracted_pages_count"] = len(extracted_pages)
+
             # Processing runs
             cur.execute(
                 """
