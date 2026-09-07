@@ -20,19 +20,27 @@ import { NavItem } from "@/components/layout/Sidebar";
 interface OverviewViewProps {
   onNavigate: (view: NavItem) => void;
   onOpenUpload: () => void;
+  selectedDatasetId?: string;
+  totalFacts?: number;
 }
 
-export function OverviewView({ onNavigate, onOpenUpload }: OverviewViewProps) {
+export function OverviewView({
+  onNavigate,
+  onOpenUpload,
+  selectedDatasetId,
+  totalFacts = 0,
+}: OverviewViewProps) {
   const [datasets, setDatasets] = useState<DatasetResponse[]>([]);
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [relationships, setRelationships] = useState<RelationshipWithDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    const dsId = selectedDatasetId === "all" ? undefined : selectedDatasetId;
     Promise.all([
       api.getDatasets(),
-      api.getDocuments(),
-      api.getRelationships(),
+      api.getDocuments(dsId),
+      api.getRelationships({ datasetId: dsId }),
     ])
       .then(([ds, docs, rels]) => {
         setDatasets(ds);
@@ -41,9 +49,12 @@ export function OverviewView({ onNavigate, onOpenUpload }: OverviewViewProps) {
       })
       .catch((err) => console.error("Error loading overview data:", err))
       .finally(() => setLoading(false));
-  }, []);
+  }, [selectedDatasetId]);
 
-  const primaryDataset = datasets[0];
+  const activeDs = selectedDatasetId === "all" 
+    ? null 
+    : datasets.find((d) => d.id === selectedDatasetId);
+  const displayedFactCount = activeDs ? (activeDs.fact_count ?? 0) : totalFacts;
   const corroborationCount = relationships.filter((r) => r.relationship_type === "CORROBORATES").length;
   const contradictionCount = relationships.filter((r) => r.relationship_type === "CONTRADICTS").length;
   const contextualCount = relationships.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length;
@@ -98,7 +109,7 @@ export function OverviewView({ onNavigate, onOpenUpload }: OverviewViewProps) {
               Grounded Facts
             </CardDescription>
             <CardTitle className="text-2xl font-bold font-mono text-emerald-500">
-              {loading ? <Skeleton className="h-8 w-16" /> : primaryDataset?.fact_count || 10}
+              {loading ? <Skeleton className="h-8 w-16" /> : displayedFactCount}
             </CardTitle>
           </CardHeader>
           <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground flex items-center gap-1">

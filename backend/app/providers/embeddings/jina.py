@@ -4,6 +4,7 @@ Primary and default embedding provider using Jina's hosted API (jina-embeddings-
 Produces 1024-dimensional vectors for both document chunks and user queries.
 """
 
+import asyncio
 import logging
 from typing import Any
 import httpx
@@ -23,7 +24,7 @@ class JinaEmbeddingProvider(EmbeddingProvider):
         api_key: str,
         model: str = "jina-embeddings-v3",
         dimension: int = 1024,
-        timeout: float = 60.0,
+        timeout: float = 90.0,
     ) -> None:
         if not api_key or not api_key.strip():
             raise ValueError("Jina API key cannot be empty.")
@@ -48,7 +49,7 @@ class JinaEmbeddingProvider(EmbeddingProvider):
         return self._dimension
 
     async def _embed_batch(self, texts: list[str], task: str) -> list[list[float]]:
-        """Call Jina API to embed a batch of texts."""
+        """Call Jina API to embed a batch of texts with retry and backoff."""
         if not texts:
             return []
 
@@ -63,27 +64,48 @@ class JinaEmbeddingProvider(EmbeddingProvider):
             "task": task,
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(self.API_URL, headers=headers, json=payload)
-                if response.status_code != 200:
-                    # Clean error without exposing api_key
-                    error_preview = response.text[:200]
-                    raise RuntimeError(f"Jina API error ({response.status_code}): {error_preview}")
+        max_retries = 3
+        backoff = 2.0
 
-                data = response.json()
-                results = [item["embedding"] for item in data.get("data", [])]
-
-                # Strict dimension verification
-                for vec in results:
-                    if len(vec) != self._dimension:
-                        raise ValueError(
-                            f"Dimension mismatch from Jina API: expected {self._dimension}, got {len(vec)}."
+        for attempt in range(1, max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.post(self.API_URL, headers=headers, json=payload)
+                    if response.status_code == 429:
+                        logger.warning(
+                            f"Jina API 429 rate limit hit. Backing off for {backoff:.1f}s (attempt {attempt}/{max_retries})..."
                         )
+                        if attempt == max_retries:
+                            raise RuntimeError(f"Jina API rate limit exceeded after {max_retries} attempts.")
+                        await asyncio.sleep(backoff)
+                        backoff *= 2
+                        continue
 
-                return results
-        except httpx.RequestError as exc:
-            raise RuntimeError(f"Network error communicating with Jina API: {exc.__class__.__name__}") from None
+                    if response.status_code != 200:
+                        error_preview = response.text[:200]
+                        raise RuntimeError(f"Jina API error ({response.status_code}): {error_preview}")
+
+                    data = response.json()
+                    results = [item["embedding"] for item in data.get("data", [])]
+
+                    # Strict dimension verification
+                    for vec in results:
+                        if len(vec) != self._dimension:
+                            raise ValueError(
+                                f"Dimension mismatch from Jina API: expected {self._dimension}, got {len(vec)}."
+                            )
+
+                    return results
+            except httpx.RequestError as exc:
+                logger.warning(
+                    f"Jina API network error ({exc.__class__.__name__}). Retrying in {backoff:.1f}s (attempt {attempt}/{max_retries})..."
+                )
+                if attempt == max_retries:
+                    raise RuntimeError(
+                        f"Network error communicating with Jina API: {exc.__class__.__name__}"
+                    ) from None
+                await asyncio.sleep(backoff)
+                backoff *= 2
 
     async def embed_documents(self, texts: list[str]) -> list[list[float]]:
         """

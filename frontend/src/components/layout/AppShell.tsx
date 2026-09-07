@@ -90,6 +90,8 @@ export function AppShell() {
             <OverviewView
               onNavigate={(v) => setActiveView(v)}
               onOpenUpload={() => setIsUploadOpen(true)}
+              selectedDatasetId={selectedDatasetId}
+              totalFacts={totalFacts}
             />
           )}
 
