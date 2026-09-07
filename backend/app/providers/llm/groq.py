@@ -3,6 +3,7 @@ Groq LLM Provider Implementation.
 Primary and default LLM provider using Groq's high-speed hosted inference API.
 """
 
+import asyncio
 import json
 import logging
 from typing import Any
@@ -39,7 +40,7 @@ class GroqProvider(LLMProvider):
         return self._model
 
     async def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        """Call Groq chat completions API with the given prompt."""
+        """Call Groq chat completions API with automatic rate-limit backoff."""
         messages: list[dict[str, str]] = []
         if system_prompt:
             messages.append({"role": "system", "content": system_prompt})
@@ -49,23 +50,48 @@ class GroqProvider(LLMProvider):
             "Authorization": f"Bearer {self._api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
+        payload: dict[str, Any] = {
             "model": self._model,
             "messages": messages,
             "temperature": 0.1,
+            "max_tokens": 4096,
         }
+        if system_prompt and "json" in system_prompt.lower():
+            payload["response_format"] = {"type": "json_object"}
 
-        try:
-            async with httpx.AsyncClient(timeout=self._timeout) as client:
-                response = await client.post(self.BASE_URL, headers=headers, json=payload)
-                if response.status_code != 200:
-                    # Clean error without exposing api_key
-                    error_msg = response.text[:200]
-                    raise RuntimeError(f"Groq API error ({response.status_code}): {error_msg}")
-                data = response.json()
-                return data["choices"][0]["message"]["content"]
-        except httpx.RequestError as exc:
-            raise RuntimeError(f"Network error communicating with Groq API: {exc.__class__.__name__}") from None
+        max_retries = 3
+        backoff = 3.0
+
+        for attempt in range(max_retries + 1):
+            try:
+                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                    response = await client.post(self.BASE_URL, headers=headers, json=payload)
+
+                    if response.status_code == 429:
+                        if attempt < max_retries:
+                            retry_after = float(response.headers.get("retry-after", backoff))
+                            logger.warning(
+                                f"Groq 429 rate limit hit. Backing off for {retry_after:.1f}s (attempt {attempt + 1}/{max_retries})..."
+                            )
+                            await asyncio.sleep(retry_after)
+                            backoff *= 1.5
+                            continue
+                        else:
+                            error_msg = response.text[:200]
+                            raise RuntimeError(f"Groq API rate limit exceeded ({response.status_code}): {error_msg}")
+
+                    if response.status_code != 200:
+                        error_msg = response.text[:200]
+                        raise RuntimeError(f"Groq API error ({response.status_code}): {error_msg}")
+
+                    data = response.json()
+                    return data["choices"][0]["message"]["content"]
+            except httpx.RequestError as exc:
+                if attempt < max_retries:
+                    await asyncio.sleep(backoff)
+                    continue
+                raise RuntimeError(f"Network error communicating with Groq API: {exc.__class__.__name__}") from None
+
 
     async def extract_facts(self, text: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         """Extract candidate facts from text chunk using Groq with structured prompt."""
