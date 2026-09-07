@@ -16,7 +16,11 @@ request_id_ctx: ContextVar[str | None] = ContextVar("request_id", default=None)
 
 # Patterns for sensitive credentials that must never be exposed in logs
 SENSITIVE_PATTERNS = [
-    # API keys and bearer tokens
+    # URL query parameter keys: ?key=... or &key=...
+    (re.compile(r"([?&]key=)[^&\s'\"]+", re.IGNORECASE), r"\1[REDACTED_KEY]"),
+    # Google API key header: x-goog-api-key: ...
+    (re.compile(r"(x-goog-api-key[\"'\s:=]+)[a-zA-Z0-9_\-\.]{12,}", re.IGNORECASE), r"\1[REDACTED_KEY]"),
+    # Labeled API keys and tokens
     (re.compile(r"(bearer\s+)[a-zA-Z0-9_\-\.]{15,}", re.IGNORECASE), r"\1[REDACTED_TOKEN]"),
     (re.compile(r"(api[_-]?key[\"'\s:=]+)[a-zA-Z0-9_\-\.]{12,}", re.IGNORECASE), r"\1[REDACTED_KEY]"),
     (re.compile(r"(groq_api_key[\"'\s:=]+)[a-zA-Z0-9_\-\.]{12,}", re.IGNORECASE), r"\1[REDACTED_GROQ_KEY]"),
@@ -26,6 +30,12 @@ SENSITIVE_PATTERNS = [
     (re.compile(r"(postgresql(?:ql|\+asyncpg)?://[^:]+:)[^@]+(@)", re.IGNORECASE), r"\1[REDACTED_PASSWORD]\2"),
     # Supabase service role keys / anon keys in headers or strings
     (re.compile(r"(supabase[_-]?(?:service[_-]role[_-]?key|anon[_-]?key)[\"'\s:=]+)[a-zA-Z0-9_\-\.]{20,}", re.IGNORECASE), r"\1[REDACTED_SUPABASE_KEY]"),
+    # Unlabeled standalone provider key patterns
+    (re.compile(r"\bAQ\.[a-zA-Z0-9_\-]{20,}\b"), "[REDACTED_GEMINI_KEY]"),
+    (re.compile(r"\bgsk_[a-zA-Z0-9_\-]{20,}\b"), "[REDACTED_GROQ_KEY]"),
+    (re.compile(r"\bjina_[a-zA-Z0-9_\-]{20,}\b"), "[REDACTED_JINA_KEY]"),
+    # Full JWT tokens
+    (re.compile(r"\beyJ[a-zA-Z0-9_\-]{20,}\.[a-zA-Z0-9_\-]{20,}\.[a-zA-Z0-9_\-]{20,}\b"), "[REDACTED_JWT]"),
 ]
 
 
@@ -37,6 +47,25 @@ def mask_sensitive_data(text: str) -> str:
     for pattern, replacement in SENSITIVE_PATTERNS:
         sanitized = pattern.sub(replacement, sanitized)
     return sanitized
+
+
+class SensitiveDataFilter(logging.Filter):
+    """Logging filter that scrubs sensitive credentials from all record messages and args."""
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = mask_sensitive_data(record.msg)
+        if record.args:
+            if isinstance(record.args, tuple):
+                record.args = tuple(
+                    mask_sensitive_data(str(a)) if isinstance(a, str) else a for a in record.args
+                )
+            elif isinstance(record.args, dict):
+                record.args = {
+                    k: mask_sensitive_data(str(v)) if isinstance(v, str) else v
+                    for k, v in record.args.items()
+                }
+        return True
 
 
 class StructuredJsonFormatter(logging.Formatter):
@@ -93,6 +122,9 @@ def configure_logging(log_format: str = "text", level: int = logging.INFO) -> No
         root_logger.removeHandler(handler)
 
     stream_handler = logging.StreamHandler()
+    sensitive_filter = SensitiveDataFilter()
+    stream_handler.addFilter(sensitive_filter)
+
     if log_format.lower() == "json":
         stream_handler.setFormatter(StructuredJsonFormatter())
     else:
@@ -101,6 +133,11 @@ def configure_logging(log_format: str = "text", level: int = logging.INFO) -> No
         )
 
     root_logger.addHandler(stream_handler)
+    root_logger.addFilter(sensitive_filter)
+
+    # Attach filter specifically to HTTP client loggers
+    logging.getLogger("httpx").addFilter(sensitive_filter)
+    logging.getLogger("httpcore").addFilter(sensitive_filter)
 
 
 def get_logger(name: str) -> logging.Logger:

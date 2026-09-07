@@ -18,6 +18,8 @@ class FallbackLLMProvider(LLMProvider):
     def __init__(self, primary: LLMProvider, fallback: LLMProvider) -> None:
         self.primary = primary
         self.fallback = fallback
+        self.last_used_provider = primary.provider_name
+        self.last_used_model = primary.model_name
 
     @property
     def provider_name(self) -> str:
@@ -27,16 +29,26 @@ class FallbackLLMProvider(LLMProvider):
     def model_name(self) -> str:
         return f"{self.primary.model_name} (fallback: {self.fallback.model_name})"
 
+    @property
+    def active_provider_name(self) -> str:
+        return getattr(self, "last_used_provider", self.primary.provider_name)
+
     async def generate(self, prompt: str, system_prompt: str | None = None) -> str:
         """Attempt primary provider; on failure, log and execute with fallback provider."""
         try:
-            return await self.primary.generate(prompt=prompt, system_prompt=system_prompt)
+            res = await self.primary.generate(prompt=prompt, system_prompt=system_prompt)
+            self.last_used_provider = self.primary.provider_name
+            self.last_used_model = self.primary.model_name
+            return res
         except Exception as exc:
             logger.warning(
                 f"Primary LLM ({self.primary.provider_name} - {self.primary.model_name}) failed: {exc}. "
                 f"Falling back to {self.fallback.provider_name} ({self.fallback.model_name})..."
             )
-            return await self.fallback.generate(prompt=prompt, system_prompt=system_prompt)
+            res = await self.fallback.generate(prompt=prompt, system_prompt=system_prompt)
+            self.last_used_provider = self.fallback.provider_name
+            self.last_used_model = self.fallback.model_name
+            return res
 
     async def extract_facts(self, text: str, context: dict[str, Any] | None = None) -> list[dict[str, Any]]:
         try:

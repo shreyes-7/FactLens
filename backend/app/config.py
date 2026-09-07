@@ -56,6 +56,12 @@ class Settings(BaseSettings):
         default=False,
         description="Enable automatic fallback between Gemini and Groq if both keys are present.",
     )
+    fact_extraction_batch_size: int = Field(
+        default=4,
+        ge=1,
+        le=10,
+        description="Number of chunks to batch together in a single LLM fact-extraction request.",
+    )
 
     # Embedding Settings
     embedding_provider: Literal["jina", "local", "mock"] = Field(

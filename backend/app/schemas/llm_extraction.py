@@ -7,6 +7,7 @@ from backend.app.schemas.fact import FactType
 
 
 class ExtractedFactItem(BaseModel):
+    chunk_id: str | None = Field(default=None, description="The stable identifier of the source chunk from which this fact was extracted")
     subject: str = Field(description="The entity, company, nation, or topic (e.g., 'Delhivery', 'India', 'Express Parcel')")
     predicate: str = Field(description="The specific metric or attribute (e.g., 'Revenue from operations', 'GDP growth', 'EBITDA')")
     raw_claim: str = Field(description="The full atomic claim as stated in the text")

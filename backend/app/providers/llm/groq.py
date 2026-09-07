@@ -80,12 +80,39 @@ class GroqProvider(LLMProvider):
                             error_msg = response.text[:200]
                             raise RuntimeError(f"Groq API rate limit exceeded ({response.status_code}): {error_msg}")
 
+                    if response.status_code == 400 and "json_validate_failed" in response.text:
+                        # Some open-source models fail Groq's grammar validator on complex prompt structures.
+                        # Fallback to standard generation; the prompt already commands valid JSON.
+                        if "response_format" in payload:
+                            logger.info("Groq json_validate_failed; retrying without response_format constraints...")
+                            del payload["response_format"]
+                            continue
+
                     if response.status_code != 200:
                         error_msg = response.text[:200]
                         raise RuntimeError(f"Groq API error ({response.status_code}): {error_msg}")
 
                     data = response.json()
-                    return data["choices"][0]["message"]["content"]
+                    choices = data.get("choices", [])
+                    if not choices:
+                        raise RuntimeError(f"Groq returned empty choices: {data}")
+
+                    content = choices[0]["message"]["content"] or ""
+
+                    # Normalize response: strip thinking tags (<think>...</think>)
+                    import re
+                    content = re.sub(r"<think>.*?</think>", "", content, flags=re.DOTALL)
+
+                    # Strip markdown code blocks
+                    content = content.strip()
+                    if content.startswith("```json"):
+                        content = content[7:]
+                    elif content.startswith("```"):
+                        content = content[3:]
+                    if content.endswith("```"):
+                        content = content[:-3]
+
+                    return content.strip()
             except httpx.RequestError as exc:
                 if attempt < max_retries:
                     await asyncio.sleep(backoff)
