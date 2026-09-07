@@ -207,12 +207,12 @@ def insert_facts_and_evidence(
     fact_query = """
         INSERT INTO public.facts (
             id, dataset_id, document_id, subject, predicate, raw_claim,
-            value_text, raw_value_text, value_numeric, value_boolean,
+            value_text, raw_value_text, value_numeric, normalized_value_numeric, value_boolean,
             unit, normalized_unit, fact_type, period_text, period_start, period_end,
             scope, geography, segment, status, attribution, qualifiers, confidence, metadata
         ) VALUES (
             %s, %s, %s, %s, %s, %s,
-            %s, %s, %s, %s,
+            %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s, %s::jsonb, %s, %s::jsonb
         );
@@ -247,6 +247,7 @@ def insert_facts_and_evidence(
                         fact_data.get("value_text"),
                         fact_data.get("raw_value_text"),
                         fact_data.get("value_numeric"),
+                        fact_data.get("normalized_value_numeric"),
                         fact_data.get("value_boolean"),
                         fact_data.get("unit"),
                         fact_data.get("normalized_unit"),
@@ -265,6 +266,7 @@ def insert_facts_and_evidence(
                     ),
                 )
                 facts_inserted += 1
+
 
                 # 2. Insert Evidence
                 cur.execute(
@@ -328,4 +330,71 @@ def update_processing_run_counts(
             cur.execute(query, params)
     finally:
         conn.close()
+
+
+def get_all_facts(
+    dataset_id: str | None = None,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve all facts optionally filtered by dataset_id."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT id, dataset_id, document_id, subject, predicate, raw_claim,
+               value_text, raw_value_text, value_numeric, normalized_value_numeric,
+               value_boolean, unit, normalized_unit, fact_type, period_text,
+               period_start, period_end, scope, geography, segment, status,
+               attribution, qualifiers, confidence, metadata
+        FROM public.facts
+    """
+    params: list[Any] = []
+    if dataset_id:
+        query += " WHERE dataset_id = %s"
+        params.append(dataset_id)
+    query += " ORDER BY created_at ASC;"
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def update_fact_normalization(
+    fact_id: str,
+    normalized_value_numeric: float | None,
+    normalized_unit: str | None,
+    period_start: Any = None,
+    period_end: Any = None,
+    settings: Settings | None = None,
+) -> None:
+    """Update normalized attributes on an existing fact."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    query = """
+        UPDATE public.facts
+        SET normalized_value_numeric = %s,
+            normalized_unit = %s,
+            period_start = %s,
+            period_end = %s,
+            updated_at = now()
+        WHERE id = %s;
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                query,
+                (
+                    normalized_value_numeric,
+                    normalized_unit,
+                    period_start,
+                    period_end,
+                    fact_id,
+                ),
+            )
+    finally:
+        conn.close()
+
 

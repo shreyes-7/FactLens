@@ -21,7 +21,9 @@ from backend.app.database import (
 )
 from backend.app.extraction.fact_extractor import FactExtractor
 from backend.app.ingestion.chunker import chunk_page
+from backend.app.normalization.normalizer import FactNormalizer
 from backend.app.providers.embeddings import get_embedding_provider
+
 from backend.app.providers.embeddings.base import EmbeddingProvider
 from backend.app.providers.llm import get_llm_provider
 from backend.app.providers.llm.base import LLMProvider
@@ -145,9 +147,11 @@ class ProcessingService:
                     page_rejected += rejected
 
                     for f_obj, e_obj in facts_with_evidence:
+                        FactNormalizer.normalize_fact(f_obj)
                         page_facts_with_evidence.append(
                             (f_obj.model_dump(), e_obj.model_dump())
                         )
+
 
                 # 5. Persist facts & evidence
                 if page_facts_with_evidence:

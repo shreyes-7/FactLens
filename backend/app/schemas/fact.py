@@ -24,10 +24,12 @@ class FactBase(BaseModel):
     value_text: str | None = None
     raw_value_text: str | None = None
     value_numeric: float | None = None
+    normalized_value_numeric: float | None = None
     value_boolean: bool | None = None
     
     unit: str | None = None
     normalized_unit: str | None = None
+
     
     fact_type: FactType = FactType.NUMERICAL
     
