@@ -235,6 +235,28 @@ def insert_facts_and_evidence(
     try:
         with conn.cursor() as cur:
             for fact_data, evidence_data in items:
+                # Deduplication guard: do not insert duplicate facts for the same document
+                check_query = """
+                    SELECT f.id FROM public.facts f
+                    LEFT JOIN public.evidence e ON f.id = e.fact_id
+                    WHERE f.document_id = %s
+                      AND (
+                          lower(trim(f.raw_claim)) = lower(trim(%s))
+                          OR (e.quote IS NOT NULL AND lower(trim(e.quote)) = lower(trim(%s)))
+                      )
+                    LIMIT 1;
+                """
+                cur.execute(
+                    check_query,
+                    (
+                        str(fact_data["document_id"]),
+                        fact_data.get("raw_claim") or "",
+                        evidence_data.get("quote") or "",
+                    ),
+                )
+                if cur.fetchone():
+                    continue
+
                 # 1. Insert Fact
                 cur.execute(
                     fact_query,
