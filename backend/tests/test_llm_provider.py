@@ -56,3 +56,46 @@ async def test_groq_generate_mocked():
         call_kwargs = mock_post.call_args[1]
         assert call_kwargs["json"]["model"] == "openai/gpt-oss-120b"
         assert call_kwargs["headers"]["Authorization"] == "Bearer gsk_mock_key"
+
+
+def test_factory_returns_fallback_provider_when_enabled():
+    """Verify factory returns FallbackLLMProvider when llm_fallback_enabled is True."""
+    from backend.app.providers.llm.fallback import FallbackLLMProvider
+
+    settings = Settings(
+        _env_file=None,
+        llm_provider="gemini",
+        llm_api_key="gemini_key",
+        groq_api_key="gsk_key",
+        jina_api_key="jina_key",
+        llm_fallback_enabled=True,
+    )
+    provider = get_llm_provider(settings)
+    assert isinstance(provider, FallbackLLMProvider)
+    assert "gemini" in provider.provider_name
+    assert "groq" in provider.provider_name
+
+
+@pytest.mark.asyncio
+async def test_fallback_provider_fails_over_to_secondary():
+    """Verify FallbackLLMProvider transparently falls back when primary fails."""
+    from backend.app.providers.llm.fallback import FallbackLLMProvider
+
+    class FailingPrimary:
+        provider_name = "failing_primary"
+        model_name = "failing_model"
+
+        async def generate(self, prompt, system_prompt=None):
+            raise RuntimeError("Primary 503 Outage")
+
+    class WorkingFallback:
+        provider_name = "working_fallback"
+        model_name = "working_model"
+
+        async def generate(self, prompt, system_prompt=None):
+            return "Fallback answer"
+
+    fb = FallbackLLMProvider(primary=FailingPrimary(), fallback=WorkingFallback())
+    result = await fb.generate("Test")
+    assert result == "Fallback answer"
+

@@ -52,6 +52,10 @@ class Settings(BaseSettings):
         default=None,
         description="Gemini model name.",
     )
+    llm_fallback_enabled: bool = Field(
+        default=False,
+        description="Enable automatic fallback between Gemini and Groq if both keys are present.",
+    )
 
     # Embedding Settings
     embedding_provider: Literal["jina", "local", "mock"] = Field(

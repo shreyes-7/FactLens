@@ -9,6 +9,7 @@ from backend.app.config import Settings
 def test_config_groq_and_jina_defaults():
     """Verify default provider selections are Groq and Jina with 1024 dimensions."""
     settings = Settings(
+        _env_file=None,
         groq_api_key="gsk_test_key",
         jina_api_key="jina_test_key",
     )
@@ -17,6 +18,7 @@ def test_config_groq_and_jina_defaults():
     assert settings.embedding_provider == "jina"
     assert settings.embedding_model == "jina-embeddings-v3"
     assert settings.embedding_dimension == 1024
+
 
 
 def test_groq_requires_api_key():

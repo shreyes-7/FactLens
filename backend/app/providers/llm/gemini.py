@@ -1,27 +1,32 @@
 """
-Gemini LLM Provider Implementation (Optional Provider).
-Preserved for backwards compatibility and provider flexibility.
+Gemini LLM Provider Implementation.
+Connects to Google Gemini API (supporting gemini-flash-latest, gemini-2.5-flash, etc.).
 """
 
+import json
+import logging
+import re
 from typing import Any
 import httpx
 
 from backend.app.providers.llm.base import LLMProvider
 
+logger = logging.getLogger("factlens.llm.gemini")
+
 
 class GeminiProvider(LLMProvider):
-    """Optional Google Gemini API provider."""
+    """Google Gemini API provider."""
 
     def __init__(
         self,
         api_key: str,
-        model: str = "gemini-1.5-flash",
+        model: str = "gemini-flash-latest",
         timeout: float = 60.0,
     ) -> None:
         if not api_key or not api_key.strip():
             raise ValueError("Gemini API key cannot be empty.")
         self._api_key = api_key.strip()
-        self._model = model
+        self._model = model.strip()
         self._timeout = timeout
 
     @property
@@ -33,14 +38,21 @@ class GeminiProvider(LLMProvider):
         return self._model
 
     async def generate(self, prompt: str, system_prompt: str | None = None) -> str:
-        """Call Gemini REST API."""
+        """Call Gemini generateContent API with optional system instructions and JSON handling."""
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self._model}:generateContent?key={self._api_key}"
-        parts = []
-        if system_prompt:
-            parts.append({"text": f"System: {system_prompt}\n\n"})
-        parts.append({"text": prompt})
 
-        payload = {"contents": [{"parts": parts}]}
+        payload: dict[str, Any] = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "temperature": 0.0,
+            },
+        }
+
+        if system_prompt:
+            payload["system_instruction"] = {
+                "parts": [{"text": system_prompt}]
+            }
+
         headers = {"Content-Type": "application/json"}
 
         try:
@@ -49,7 +61,18 @@ class GeminiProvider(LLMProvider):
                 if response.status_code != 200:
                     raise RuntimeError(f"Gemini API error ({response.status_code}): {response.text[:200]}")
                 data = response.json()
-                return data["candidates"][0]["content"]["parts"][0]["text"]
+                text = data["candidates"][0]["content"]["parts"][0]["text"]
+
+                # Strip markdown json code fences if present: ```json ... ```
+                text = text.strip()
+                if text.startswith("```json"):
+                    text = text[7:]
+                elif text.startswith("```"):
+                    text = text[3:]
+                if text.endswith("```"):
+                    text = text[:-3]
+
+                return text.strip()
         except httpx.RequestError as exc:
             raise RuntimeError(f"Network error communicating with Gemini API: {exc.__class__.__name__}") from None
 
