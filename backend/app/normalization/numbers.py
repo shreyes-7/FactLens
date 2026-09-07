@@ -78,12 +78,24 @@ def parse_raw_number_string(text: str) -> tuple[float | None, bool]:
 def detect_scale_multiplier(text: str) -> float:
     """
     Detect numerical scale multiplier from words or abbreviations in text or unit string.
+    Supports compound scales like 'lakh crore' (1e5 * 1e7 = 1e12) and 'thousand crore' (1e10).
+    Avoids duplicate multiplication from synonyms across unit and raw text (e.g. 'crore' and 'cr').
     e.g. 'Rs. 127 Cr' -> 10,000,000 (1e7)
+         'Rs. 18.2 Lakh Crore' -> 1,000,000,000,000 (1e12)
     """
     if not text:
         return 1.0
 
-    tokens = re.findall(r"[A-Za-z]+", text.lower())
+    lower_text = text.lower()
+
+    # 1. Check for known Indian compound scales
+    if re.search(r"\b(lakh|lac|lakhs|lacs)\s*(crore|crores|cr|crs)\b", lower_text):
+        return 1e12
+    if re.search(r"\b(thousand|thousands|k)\s*(crore|crores|cr|crs)\b", lower_text):
+        return 1e10
+
+    # 2. Check for single scale multiplier
+    tokens = re.findall(r"[A-Za-z]+", lower_text)
     for token in tokens:
         if token in SCALE_MULTIPLIERS:
             return SCALE_MULTIPLIERS[token]

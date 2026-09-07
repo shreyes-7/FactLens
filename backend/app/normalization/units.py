@@ -14,8 +14,9 @@ UNIT_PATTERNS: list[tuple[re.Pattern, str]] = [
     (re.compile(r"(\b(eur|euros?)\b|[€])", re.IGNORECASE), "EUR"),
     (re.compile(r"(\b(gbp|pounds?)\b|[£])", re.IGNORECASE), "GBP"),
 
-    # Percentages
+    # Percentages & Basis Points
     (re.compile(r"(\b(percent|percentage|per\s*cent)\b|[%])", re.IGNORECASE), "PERCENT"),
+    (re.compile(r"\b(bps|basis\s*points?)\b", re.IGNORECASE), "BPS"),
 
 
     # Time & Durations

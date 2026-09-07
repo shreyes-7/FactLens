@@ -64,3 +64,10 @@ def test_normalize_number_percentage():
     # 18.0 percent stays 18.0
     norm = normalize_number(value_numeric=18.0, raw_value_text="18%+", unit="percent")
     assert norm == 18.0
+
+
+def test_normalize_number_compound_scale():
+    # 17.34 Lakh Crore -> 17,340,000,000,000.0 (17.34 * 1e12)
+    norm = normalize_number(value_numeric=17.34, raw_value_text="Rs. 17.34 Lakh Crore", unit="INR")
+    assert norm == 17340000000000.0
+

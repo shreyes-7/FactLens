@@ -36,6 +36,17 @@ def test_normalize_weights_and_shares():
     assert normalize_unit("parcels") == "PARCELS"
 
 
+def test_normalize_basis_points():
+    assert normalize_unit("bps") == "BPS"
+    assert normalize_unit("basis points") == "BPS"
+
+
+def test_normalize_custom_unit_fallback():
+    assert normalize_unit("pincodes") == "PINCODES"
+    assert normalize_unit("automated gateways") == "AUTOMATED GATEWAYS"
+
+
 def test_normalize_empty():
     assert normalize_unit(None) is None
     assert normalize_unit("") is None
+
