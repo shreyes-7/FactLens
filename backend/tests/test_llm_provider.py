@@ -10,12 +10,14 @@ from backend.app.providers.llm import get_llm_provider, GroqProvider, GeminiProv
 
 
 def test_factory_returns_groq_by_default():
-    """Verify factory returns GroqProvider with configured model when LLM_PROVIDER=groq."""
+    """Verify factory returns GroqProvider with configured model when LLM_PROVIDER=groq and fallback is disabled."""
     settings = Settings(
+        _env_file=None,
         llm_provider="groq",
         groq_api_key="gsk_test_key",
         groq_model="openai/gpt-oss-120b",
         jina_api_key="jina_key",
+        llm_fallback_enabled=False,
     )
     provider = get_llm_provider(settings)
     assert isinstance(provider, GroqProvider)
@@ -24,12 +26,14 @@ def test_factory_returns_groq_by_default():
 
 
 def test_factory_returns_gemini_when_configured():
-    """Verify factory returns GeminiProvider when LLM_PROVIDER=gemini."""
+    """Verify factory returns GeminiProvider when LLM_PROVIDER=gemini and fallback is disabled."""
     settings = Settings(
+        _env_file=None,
         llm_provider="gemini",
         llm_api_key="gemini_key",
         groq_api_key="gsk_key",
         jina_api_key="jina_key",
+        llm_fallback_enabled=False,
     )
     provider = get_llm_provider(settings)
     assert isinstance(provider, GeminiProvider)

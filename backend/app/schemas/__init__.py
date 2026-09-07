@@ -8,6 +8,13 @@ from backend.app.schemas.chunk import ChunkCreate, ChunkResponse
 from backend.app.schemas.evidence import EvidenceCreate, EvidenceResponse
 from backend.app.schemas.fact import FactCreate, FactResponse, FactType
 from backend.app.schemas.llm_extraction import ExtractedFactItem, FactExtractionBatch
+from backend.app.schemas.relationship import (
+    FactRelationshipBase,
+    FactRelationshipCreate,
+    FactRelationshipResponse,
+    LLMReasoningOutput,
+    RelationshipType,
+)
 
 __all__ = [
     "CandidatePair",
@@ -22,5 +29,10 @@ __all__ = [
     "FactType",
     "ExtractedFactItem",
     "FactExtractionBatch",
+    "FactRelationshipBase",
+    "FactRelationshipCreate",
+    "FactRelationshipResponse",
+    "LLMReasoningOutput",
+    "RelationshipType",
 ]
 

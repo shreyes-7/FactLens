@@ -5,6 +5,7 @@ Provides connection management and vector similarity search for chunks.
 
 import json
 from typing import Any
+from uuid import uuid4
 import psycopg2
 from psycopg2.extras import RealDictCursor
 
@@ -510,6 +511,122 @@ def find_candidate_facts_pgvector(
             return [dict(r) for r in cur.fetchall()]
     finally:
         conn.close()
+
+
+def insert_fact_relationship(
+    relationship: dict[str, Any],
+    settings: Settings | None = None,
+) -> str:
+    """
+    Persist a verified fact relationship to public.fact_relationships.
+    Enforces canonical ordering (fact_a_id < fact_b_id) and updates on conflict.
+    """
+    cfg = settings or get_settings()
+    id_a = str(relationship["fact_a_id"])
+    id_b = str(relationship["fact_b_id"])
+
+    if id_a >= id_b:
+        raise ValueError(f"Constraint violation: fact_a_id ({id_a}) must be strictly less than fact_b_id ({id_b}).")
+
+    rel_id = str(relationship.get("id") or uuid4())
+    context_json = json.dumps(relationship.get("contextual_factors") or {})
+
+    query = """
+        INSERT INTO public.fact_relationships (
+            id, fact_a_id, fact_b_id, relationship_type, confidence,
+            reason, contextual_factors, reasoning_method, model, prompt_version
+        ) VALUES (
+            %s, %s, %s, %s, %s,
+            %s, %s::jsonb, %s, %s, %s
+        )
+        ON CONFLICT (fact_a_id, fact_b_id) DO UPDATE
+        SET relationship_type = EXCLUDED.relationship_type,
+            confidence = EXCLUDED.confidence,
+            reason = EXCLUDED.reason,
+            contextual_factors = EXCLUDED.contextual_factors,
+            reasoning_method = EXCLUDED.reasoning_method,
+            model = EXCLUDED.model,
+            prompt_version = EXCLUDED.prompt_version,
+            updated_at = now()
+        RETURNING id;
+    """
+
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute(
+                query,
+                (
+                    rel_id,
+                    id_a,
+                    id_b,
+                    relationship["relationship_type"],
+                    relationship["confidence"],
+                    relationship["reason"],
+                    context_json,
+                    relationship.get("reasoning_method", "hybrid"),
+                    relationship.get("model"),
+                    relationship.get("prompt_version"),
+                ),
+            )
+            res = cur.fetchone()
+            return str(res[0])
+    finally:
+        conn.close()
+
+
+def get_fact_relationships(
+    dataset_id: str | None = None,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve fact relationships, optionally filtered by dataset."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+
+    query = """
+        SELECT r.id, r.fact_a_id, r.fact_b_id, r.relationship_type, r.confidence,
+               r.reason, r.contextual_factors, r.reasoning_method, r.model,
+               r.created_at, r.updated_at,
+               fa.subject as fact_a_subject, fa.predicate as fact_a_predicate, fa.raw_claim as fact_a_claim,
+               fb.subject as fact_b_subject, fb.predicate as fact_b_predicate, fb.raw_claim as fact_b_claim
+        FROM public.fact_relationships r
+        JOIN public.facts fa ON r.fact_a_id = fa.id
+        JOIN public.facts fb ON r.fact_b_id = fb.id
+    """
+    params: list[Any] = []
+    if dataset_id:
+        query += " WHERE fa.dataset_id = %s AND fb.dataset_id = %s"
+        params.extend([dataset_id, dataset_id])
+
+    query += " ORDER BY r.created_at DESC;"
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return [dict(row) for row in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_fact_evidence_quote(fact_id: str, settings: Settings | None = None) -> str | None:
+    """Retrieve the primary evidence quote for a fact."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT quote FROM public.evidence
+        WHERE fact_id = %s
+        ORDER BY created_at ASC
+        LIMIT 1;
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (fact_id,))
+            row = cur.fetchone()
+            return row[0] if row else None
+    finally:
+        conn.close()
+
 
 
 
