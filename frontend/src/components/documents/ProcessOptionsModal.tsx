@@ -10,7 +10,12 @@ interface ProcessOptionsModalProps {
   documentId: string;
   filename: string;
   pageCount: number;
-  onProcessSuccess: () => void;
+  onProcessSuccess?: () => void;
+  onStartProcess?: (options: {
+    documentId: string;
+    filename: string;
+    maxPages: number;
+  }) => void;
 }
 
 export function ProcessOptionsModal({
@@ -20,6 +25,7 @@ export function ProcessOptionsModal({
   filename,
   pageCount,
   onProcessSuccess,
+  onStartProcess,
 }: ProcessOptionsModalProps) {
   const [maxPages, setMaxPages] = useState<number>(5);
   const [isProcessing, setIsProcessing] = useState(false);
@@ -27,6 +33,17 @@ export function ProcessOptionsModal({
   const [successInfo, setSuccessInfo] = useState<string | null>(null);
 
   const handleStartProcessing = async () => {
+    // If caller provided onStartProcess, immediately close dialog and delegate to background task
+    if (onStartProcess) {
+      onStartProcess({
+        documentId,
+        filename,
+        maxPages,
+      });
+      onClose();
+      return;
+    }
+
     setIsProcessing(true);
     setError(null);
     try {
@@ -46,7 +63,7 @@ export function ProcessOptionsModal({
       setTimeout(() => {
         setIsProcessing(false);
         setSuccessInfo(null);
-        onProcessSuccess();
+        if (onProcessSuccess) onProcessSuccess();
         onClose();
       }, 1500);
     } catch (err: any) {

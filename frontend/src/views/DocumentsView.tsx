@@ -15,9 +15,21 @@ interface DocumentsViewProps {
   onOpenUpload: () => void;
   datasetId?: string;
   onRefreshCounts?: () => void;
+  refreshTrigger?: number;
+  onStartProcess?: (options: {
+    documentId: string;
+    filename: string;
+    maxPages: number;
+  }) => void;
 }
 
-export function DocumentsView({ onOpenUpload, datasetId, onRefreshCounts }: DocumentsViewProps) {
+export function DocumentsView({
+  onOpenUpload,
+  datasetId,
+  onRefreshCounts,
+  refreshTrigger,
+  onStartProcess,
+}: DocumentsViewProps) {
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
@@ -40,7 +52,7 @@ export function DocumentsView({ onOpenUpload, datasetId, onRefreshCounts }: Docu
 
   useEffect(() => {
     fetchDocs();
-  }, [datasetId]);
+  }, [datasetId, refreshTrigger]);
 
   const filteredDocs = documents.filter((doc) =>
     doc.filename.toLowerCase().includes(searchTerm.toLowerCase())
@@ -195,6 +207,7 @@ export function DocumentsView({ onOpenUpload, datasetId, onRefreshCounts }: Docu
           documentId={processModalDoc.id}
           filename={processModalDoc.filename}
           pageCount={processModalDoc.pageCount}
+          onStartProcess={onStartProcess}
           onProcessSuccess={() => {
             fetchDocs();
             if (onRefreshCounts) onRefreshCounts();

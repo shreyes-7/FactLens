@@ -108,6 +108,7 @@ def parse_pdf(file_bytes: bytes, filename: str = "document.pdf") -> ParsedDocume
         page_count=page_count,
         title=title,
         metadata={
+            "file_size_bytes": len(file_bytes),
             "author": doc_metadata.get("author"),
             "subject": doc_metadata.get("subject"),
             "creator": doc_metadata.get("creator"),

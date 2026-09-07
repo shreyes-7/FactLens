@@ -7,6 +7,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Layers,
+  RefreshCw,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { DatasetResponse, DocumentResponse, RelationshipWithDetailsResponse } from "@/api/types";
@@ -22,6 +23,8 @@ interface OverviewViewProps {
   onOpenUpload: () => void;
   selectedDatasetId?: string;
   totalFacts?: number;
+  refreshTrigger?: number;
+  onRefreshAll?: () => void;
 }
 
 export function OverviewView({
@@ -29,13 +32,17 @@ export function OverviewView({
   onOpenUpload,
   selectedDatasetId,
   totalFacts = 0,
+  refreshTrigger = 0,
+  onRefreshAll,
 }: OverviewViewProps) {
   const [datasets, setDatasets] = useState<DatasetResponse[]>([]);
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
   const [relationships, setRelationships] = useState<RelationshipWithDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  useEffect(() => {
+  const fetchOverviewData = () => {
+    setLoading(true);
     const dsId = selectedDatasetId === "all" ? undefined : selectedDatasetId;
     Promise.all([
       api.getDatasets(),
@@ -46,10 +53,20 @@ export function OverviewView({
         setDatasets(ds);
         setDocuments(docs);
         setRelationships(rels.relationships || []);
+        setLastRefreshed(new Date());
       })
       .catch((err) => console.error("Error loading overview data:", err))
       .finally(() => setLoading(false));
-  }, [selectedDatasetId]);
+  };
+
+  useEffect(() => {
+    fetchOverviewData();
+  }, [selectedDatasetId, refreshTrigger]);
+
+  const handleManualRefresh = () => {
+    fetchOverviewData();
+    if (onRefreshAll) onRefreshAll();
+  };
 
   const activeDs = selectedDatasetId === "all" 
     ? null 
@@ -62,6 +79,42 @@ export function OverviewView({
 
   return (
     <div className="space-y-6 animate-in fade-in duration-150">
+      {/* Top Header Bar with Refresh Button */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-border/60">
+        <div>
+          <h2 className="text-lg font-bold tracking-tight text-foreground flex items-center gap-2">
+            Overview & Knowledge Graph Intelligence
+            <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-500 border border-emerald-500/25">
+              Live Verified
+            </span>
+          </h2>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Real-time health of extracted facts, verified evidence citations, and cross-document reconciliation.
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="hidden sm:inline text-[11px] font-mono text-muted-foreground mr-1">
+            Updated: {lastRefreshed.toLocaleTimeString()}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleManualRefresh}
+            disabled={loading}
+            className="h-8 text-xs font-medium shadow-sm hover:border-primary/50"
+            title="Refresh overview metrics and recent records"
+          >
+            <RefreshCw className={`h-3 w-3 mr-1.5 ${loading ? "animate-spin text-primary" : ""}`} />
+            Refresh
+          </Button>
+          <Button size="sm" onClick={onOpenUpload} className="h-8 text-xs font-semibold shadow-sm">
+            <Upload className="h-3.5 w-3.5 mr-1.5" />
+            Upload PDF
+          </Button>
+        </div>
+      </div>
+
       {/* Hiring Evaluator Callout Banner */}
       <div className="p-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm">
         <div className="flex items-center gap-3">

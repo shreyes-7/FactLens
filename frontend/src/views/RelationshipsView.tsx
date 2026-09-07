@@ -10,9 +10,10 @@ import { EmptyState } from "@/components/shared/EmptyState";
 interface RelationshipsViewProps {
   datasetId?: string;
   onInspectFact?: (factId: string) => void;
+  refreshTrigger?: number;
 }
 
-export function RelationshipsView({ datasetId, onInspectFact }: RelationshipsViewProps) {
+export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: RelationshipsViewProps) {
   const [relationships, setRelationships] = useState<RelationshipWithDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("ALL");
@@ -33,7 +34,7 @@ export function RelationshipsView({ datasetId, onInspectFact }: RelationshipsVie
 
   useEffect(() => {
     fetchRelationships();
-  }, [datasetId, filterType, minConfidence]);
+  }, [datasetId, filterType, minConfidence, refreshTrigger]);
 
   const handleRunReasoning = async () => {
     if (!datasetId) return;

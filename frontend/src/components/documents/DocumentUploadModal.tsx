@@ -62,14 +62,33 @@ export function DocumentUploadModal({
     setFile(f);
   };
 
+  const [uploadStage, setUploadStage] = useState<string>("");
+  const [progressPercent, setProgressPercent] = useState<number>(0);
+
   const handleUpload = async () => {
     if (!file) return;
     setIsUploading(true);
     setError(null);
+    setUploadStage("1/3 Uploading PDF binary to storage...");
+    setProgressPercent(25);
+
+    // Progressive visual step timer
+    const stepTimer = setTimeout(() => {
+      setUploadStage("2/3 Parsing document pages, layout & bounding boxes...");
+      setProgressPercent(60);
+    }, 1200);
+
+    const stepTimer2 = setTimeout(() => {
+      setUploadStage("3/3 Persisting page text & metadata to PostgreSQL...");
+      setProgressPercent(85);
+    }, 2800);
+
     try {
       let finalDatasetId = targetDatasetId;
       if (targetDatasetId === "NEW") {
         if (!newDatasetName.trim()) {
+          clearTimeout(stepTimer);
+          clearTimeout(stepTimer2);
           setError("Please enter a name for the new dataset.");
           setIsUploading(false);
           return;
@@ -79,6 +98,10 @@ export function DocumentUploadModal({
       }
 
       const resp = await api.uploadDocument(file, finalDatasetId || undefined);
+      clearTimeout(stepTimer);
+      clearTimeout(stepTimer2);
+      setProgressPercent(100);
+      setUploadStage("Complete!");
       setSuccessMessage(
         resp.is_duplicate
           ? `File '${file.name}' already ingested (${resp.pages_extracted} pages verified).`
@@ -88,11 +111,17 @@ export function DocumentUploadModal({
         setIsUploading(false);
         setFile(null);
         setSuccessMessage(null);
+        setUploadStage("");
+        setProgressPercent(0);
         onUploadSuccess();
         onClose();
-      }, 1500);
+      }, 1200);
     } catch (err: any) {
+      clearTimeout(stepTimer);
+      clearTimeout(stepTimer2);
       setIsUploading(false);
+      setUploadStage("");
+      setProgressPercent(0);
       setError(err.message || "Failed to upload document.");
     }
   };
@@ -180,6 +209,25 @@ export function DocumentUploadModal({
             </div>
           )}
         </div>
+
+        {/* Uploading progress bar */}
+        {isUploading && (
+          <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+            <div className="flex items-center justify-between text-xs">
+              <span className="font-medium text-foreground flex items-center gap-1.5">
+                <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                {uploadStage}
+              </span>
+              <span className="font-mono text-primary font-semibold">{progressPercent}%</span>
+            </div>
+            <div className="w-full bg-muted/60 h-2 rounded-full overflow-hidden">
+              <div
+                className="h-full bg-primary transition-all duration-300 rounded-full"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
 
         {/* Status messages */}
         {error && (

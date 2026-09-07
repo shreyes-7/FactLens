@@ -8,7 +8,6 @@ import {
   Sun,
   Moon,
   ShieldCheck,
-  Zap,
 } from "lucide-react";
 import { api } from "@/api/client";
 import { HealthResponse } from "@/api/types";
@@ -83,18 +82,18 @@ export function Sidebar({
       <div>
         {/* Brand Header */}
         <div className="p-5 border-b border-border/60 flex items-center justify-between">
-          <div className="flex items-center gap-2.5">
-            <div className="h-8 w-8 rounded-lg bg-primary/10 border border-primary/20 flex items-center justify-center text-primary">
-              <Zap className="h-4 w-4 fill-primary/30" />
+          <div className="flex items-center gap-3">
+            <div className="h-9 w-9 rounded-xl bg-gradient-to-br from-violet-600/20 via-sky-500/15 to-purple-600/30 border border-violet-500/40 flex items-center justify-center p-1.5 shadow-md shadow-violet-500/20">
+              <img src="/vite.svg" alt="FactLens Emblem" className="h-6 w-6 object-contain filter drop-shadow-[0_2px_8px_rgba(189,52,254,0.4)]" />
             </div>
             <div>
               <h1 className="text-sm font-bold tracking-tight text-foreground flex items-center gap-1.5">
                 FactLens
-                <span className="text-[10px] font-mono font-normal px-1.5 py-0.2 rounded bg-muted text-muted-foreground border border-border/50">
+                <span className="text-[9px] font-mono font-medium px-1.5 py-0.5 rounded bg-primary/10 text-primary border border-primary/20">
                   v0.1
                 </span>
               </h1>
-              <p className="text-[10px] text-muted-foreground truncate">
+              <p className="text-[10px] text-muted-foreground truncate font-medium">
                 Evidence Fact Knowledge Layer
               </p>
             </div>
@@ -154,25 +153,37 @@ export function Sidebar({
       {/* Bottom: System Diagnostics & Theme */}
       <div className="p-3 border-t border-border/60 space-y-3">
         {/* System Diagnostics */}
-        <div className="p-2.5 rounded-lg border border-border/50 bg-muted/30 text-[11px] space-y-1.5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-1.5 text-foreground/80 font-medium">
+        <div className="p-2.5 rounded-lg border border-border/50 bg-muted/30 text-[11px] space-y-2">
+          <div className="flex items-center justify-between pb-1 border-b border-border/40">
+            <div className="flex items-center gap-1.5 text-foreground/90 font-semibold">
               <span className={`h-2 w-2 rounded-full ${health?.database_connected ? "bg-emerald-500 animate-pulse" : "bg-rose-500"}`} />
               <span>FastAPI Backend</span>
             </div>
-            <span className="text-[10px] font-mono text-muted-foreground">
+            <span className="text-[10px] font-mono text-emerald-500 font-medium">
               {health?.status === "ok" ? "200 OK" : "Connecting..."}
             </span>
           </div>
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>Primary Model</span>
-            <span className="font-mono text-foreground/70">{health?.llm_provider || "gemini"}</span>
-          </div>
-          <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-            <span>Zero-Downtime Fallback</span>
-            <span className="text-emerald-500 font-mono">
-              {health?.fallback_enabled ? "Groq Active" : "Disabled"}
-            </span>
+
+          <div className="space-y-1 pt-0.5 text-[10px]">
+            <div className="flex items-center justify-between gap-1 text-muted-foreground">
+              <span className="font-medium text-foreground/70">Primary Model</span>
+              <span className="font-mono text-sky-400 font-semibold truncate max-w-[120px]" title={health?.primary_model || "gemini"}>
+                {health?.primary_model ? `Gemini · ${health.primary_model}` : "Gemini Flash"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between gap-1 text-muted-foreground">
+              <span className="font-medium text-foreground/70">Fallback Model</span>
+              <span className="font-mono text-amber-400 font-medium truncate max-w-[120px]" title={health?.fallback_model || "groq"}>
+                {health?.fallback_model ? `Groq · ${health.fallback_model}` : "Groq Fallback"}
+              </span>
+            </div>
+            <div className="flex items-center justify-between pt-1 border-t border-border/30 text-muted-foreground">
+              <span>Zero-Downtime</span>
+              <span className="text-emerald-500 font-mono font-medium flex items-center gap-1">
+                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                {health?.fallback_enabled ? "Groq Standby" : "Disabled"}
+              </span>
+            </div>
           </div>
         </div>
 

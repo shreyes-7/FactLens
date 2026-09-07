@@ -15,6 +15,10 @@ export interface HealthResponse {
   llm_provider: string;
   llm_model: string;
   fallback_enabled: boolean;
+  primary_provider?: string | null;
+  primary_model?: string | null;
+  fallback_provider?: string | null;
+  fallback_model?: string | null;
   embedding_provider: string;
   version: string;
   timestamp: string;

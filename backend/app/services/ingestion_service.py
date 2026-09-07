@@ -79,13 +79,26 @@ class IngestionService:
                 existing = cur.fetchone()
                 if existing:
                     logger.info("Document '%s' already exists in dataset %s.", filename, dataset_id)
+                    doc_dict = {
+                        "id": str(existing["id"]),
+                        "dataset_id": dataset_id,
+                        "filename": existing["filename"],
+                        "page_count": existing["page_count"],
+                        "file_size_bytes": existing.get("file_size_bytes", len(file_bytes)),
+                        "storage_path": existing["storage_path"],
+                        "status": existing.get("status", "ingested"),
+                        "created_at": existing.get("created_at"),
+                    }
                     return {
                         "status": "ALREADY_EXISTS",
+                        "document": doc_dict,
                         "document_id": str(existing["id"]),
                         "dataset_id": dataset_id,
                         "filename": existing["filename"],
                         "page_count": existing["page_count"],
                         "storage_path": existing["storage_path"],
+                        "is_duplicate": True,
+                        "message": f"Document '{filename}' already exists.",
                     }
 
             # 2. Parse PDF pages
@@ -174,13 +187,27 @@ class IngestionService:
                 parsed_doc.page_count,
             )
 
+            doc_dict = {
+                "id": document_id,
+                "dataset_id": dataset_id,
+                "filename": filename,
+                "title": parsed_doc.title,
+                "page_count": parsed_doc.page_count,
+                "file_size_bytes": len(file_bytes),
+                "storage_path": full_storage_path,
+                "status": "ingested",
+                "created_at": started_at,
+            }
+
             return {
                 "status": "COMPLETED",
+                "document": doc_dict,
                 "document_id": document_id,
                 "dataset_id": dataset_id,
                 "filename": filename,
                 "title": parsed_doc.title,
                 "page_count": parsed_doc.page_count,
+                "file_size_bytes": len(file_bytes),
                 "storage_path": full_storage_path,
                 "run_id": run_id,
             }
