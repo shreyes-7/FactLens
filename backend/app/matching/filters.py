@@ -103,27 +103,38 @@ def check_metric_compatibility(fact_a: dict[str, Any], fact_b: dict[str, Any]) -
 
 def check_predicate_alignment(fact_a: dict[str, Any], fact_b: dict[str, Any]) -> tuple[bool, float]:
     """
-    Lexical and token check for predicate alignment.
+    Lexical and token check for predicate/metric alignment.
     e.g. 'EBITDA' vs 'EBITDA' -> 1.0
-         'Revenue' vs 'Revenue from operations' -> high match
+         'FY24 EBITDA' (subject) + 'amount' (predicate) vs 'Delhivery' (subject) + 'EBITDA' (predicate) -> matched metric
     """
     pred_a = (fact_a.get("predicate") or "").lower().strip()
     pred_b = (fact_b.get("predicate") or "").lower().strip()
 
-    if not pred_a or not pred_b:
-        return False, 0.0
-
-    if pred_a == pred_b:
+    if pred_a and pred_b and pred_a == pred_b:
         return True, 1.0
 
     tokens_a = set(re.findall(r"\w+", pred_a))
     tokens_b = set(re.findall(r"\w+", pred_b))
 
-    if not tokens_a or not tokens_b:
+    # Enrich with subject tokens if predicate is generic (e.g. 'amount', 'value', 'total')
+    generic_preds = {"amount", "value", "total", "figure", "number", "reported", "level"}
+    subj_a = (fact_a.get("subject") or "").lower().strip()
+    subj_b = (fact_b.get("subject") or "").lower().strip()
+
+    if not tokens_a or any(t in generic_preds for t in tokens_a):
+        tokens_a.update(re.findall(r"\w+", subj_a))
+    if not tokens_b or any(t in generic_preds for t in tokens_b):
+        tokens_b.update(re.findall(r"\w+", subj_b))
+
+    # Strip pure temporal tokens from subject/predicate comparison like 'fy24', 'fy23'
+    clean_a = {t for t in tokens_a if not re.match(r"^fy\d{2,4}$", t)}
+    clean_b = {t for t in tokens_b if not re.match(r"^fy\d{2,4}$", t)}
+
+    if not clean_a or not clean_b:
         return False, 0.0
 
-    jaccard = len(tokens_a & tokens_b) / len(tokens_a | tokens_b)
-    is_aligned = jaccard >= 0.3 or (tokens_a.issubset(tokens_b) or tokens_b.issubset(tokens_a))
+    jaccard = len(clean_a & clean_b) / len(clean_a | clean_b)
+    is_aligned = jaccard >= 0.25 or (clean_a.issubset(clean_b) or clean_b.issubset(clean_a))
     return is_aligned, jaccard
 
 

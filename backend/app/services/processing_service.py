@@ -50,6 +50,7 @@ class ProcessingService:
         document_id: str,
         max_pages: int | None = None,
         page_offset: int = 0,
+        page_numbers: list[int] | None = None,
         chunk_size: int = 800,
         chunk_overlap: int = 100,
     ) -> dict[str, Any]:
@@ -75,9 +76,13 @@ class ProcessingService:
         if not all_pages:
             raise ValueError(f"No document pages found for document {document_id}.")
 
-        pages_to_process = all_pages[page_offset:]
-        if max_pages is not None:
-            pages_to_process = pages_to_process[:max_pages]
+        if page_numbers:
+            target_set = set(page_numbers)
+            pages_to_process = [p for p in all_pages if p.get("pdf_page_number") in target_set]
+        else:
+            pages_to_process = all_pages[page_offset:]
+            if max_pages is not None:
+                pages_to_process = pages_to_process[:max_pages]
 
         # Initialize or retrieve processing run
         run_id = self._create_processing_run(str(doc_uuid))

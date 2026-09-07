@@ -24,14 +24,10 @@ def init_logfire(app: FastAPI, settings: Settings) -> bool:
         import logfire
         logfire.configure(token=token, service_name=settings.app_name)
         logfire.instrument_fastapi(app)
-        logger.info("Pydantic Logfire instrumentation successfully active.")
+        logfire.instrument_pydantic()
+        logfire.instrument_httpx()
+        logger.info("Pydantic Logfire instrumentation successfully active (FastAPI, Pydantic, HTTPX).")
         return True
-    except ImportError:
-        logger.warning(
-            "LOGFIRE_TOKEN was set, but 'logfire' package is not installed. "
-            "Install with 'uv add logfire' or pip install logfire."
-        )
-        return False
     except Exception as exc:
         logger.warning(f"Failed to initialize Pydantic Logfire: {exc}. Falling back to structured logging.")
         return False

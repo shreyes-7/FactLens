@@ -58,11 +58,16 @@ def main():
     
     parser.add_argument("--max-pages", type=int, default=None, help="Maximum pages to process per document")
     parser.add_argument("--page-offset", type=int, default=0, help="Page offset to start processing from")
+    parser.add_argument("--pages", type=str, default=None, help="Comma-separated list of PDF page numbers to process (e.g. 4,6,37)")
     parser.add_argument("--chunk-size", type=int, default=800, help="Target chunk size in characters")
     parser.add_argument("--chunk-overlap", type=int, default=100, help="Chunk overlap in characters")
 
     args = parser.parse_args()
     service = ProcessingService()
+
+    page_numbers = None
+    if args.pages:
+        page_numbers = [int(p.strip()) for p in args.pages.split(",") if p.strip().isdigit()]
 
     docs_to_process = []
     if args.document_id:
@@ -76,7 +81,7 @@ def main():
     print(f"\n=======================================================")
     print(f"FactLens Processing Pipeline (Phase 04)")
     print(f"Documents to process: {len(docs_to_process)}")
-    print(f"Max pages per doc: {args.max_pages if args.max_pages is not None else 'ALL'}")
+    print(f"Target pages: {page_numbers if page_numbers else ('Max ' + str(args.max_pages) if args.max_pages is not None else 'ALL')}")
     print(f"LLM Provider: {service.settings.llm_provider} ({service.settings.groq_model})")
     print(f"Embedding Provider: {service.settings.embedding_provider} ({service.settings.embedding_model})")
     print(f"=======================================================\n")
@@ -92,6 +97,7 @@ def main():
                     document_id=doc_id,
                     max_pages=args.max_pages,
                     page_offset=args.page_offset,
+                    page_numbers=page_numbers,
                     chunk_size=args.chunk_size,
                     chunk_overlap=args.chunk_overlap,
                 )
