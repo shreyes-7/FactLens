@@ -55,6 +55,7 @@ export function OverviewView({
     ? null 
     : datasets.find((d) => d.id === selectedDatasetId);
   const displayedFactCount = activeDs ? (activeDs.fact_count ?? 0) : totalFacts;
+  const totalPages = documents.reduce((acc, d) => acc + (d.page_count || 0), 0);
   const corroborationCount = relationships.filter((r) => r.relationship_type === "CORROBORATES").length;
   const contradictionCount = relationships.filter((r) => r.relationship_type === "CONTRADICTS").length;
   const contextualCount = relationships.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length;
@@ -78,15 +79,14 @@ export function OverviewView({
         </div>
         <Button
           onClick={() => onNavigate("cases")}
-          size="sm"
-          className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0 text-xs shadow-sm font-medium"
+          className="bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs shrink-0 shadow-sm"
         >
           View Assignment Cases
           <ArrowRight className="h-3.5 w-3.5 ml-1.5" />
         </Button>
       </div>
 
-      {/* Metrics Row */}
+      {/* KPI Stats Grid */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3.5">
         <Card>
           <CardHeader className="p-4 pb-2">
@@ -99,7 +99,7 @@ export function OverviewView({
           </CardHeader>
           <CardContent className="p-4 pt-0 text-[11px] text-muted-foreground flex items-center gap-1">
             <FileText className="h-3 w-3 text-primary" />
-            <span>227 pages parsed in database</span>
+            <span>{loading ? "Calculating..." : `${totalPages} pages parsed in database`}</span>
           </CardContent>
         </Card>
 

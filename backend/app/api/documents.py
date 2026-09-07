@@ -49,7 +49,7 @@ def get_document(
 async def upload_document(
     file: UploadFile = File(..., description="PDF document file to upload and ingest"),
     dataset_id: str | None = Form(None, description="UUID of existing dataset"),
-    dataset_name: str = Form("Delhivery Financials", description="Fallback dataset name if dataset_id not provided"),
+    dataset_name: str = Form("delhivery", description="Fallback dataset name if dataset_id not provided"),
     settings: Settings = Depends(get_settings),
 ) -> DocumentUploadResponse:
     """

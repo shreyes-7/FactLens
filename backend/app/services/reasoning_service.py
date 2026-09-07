@@ -37,6 +37,20 @@ class ReasoningService:
         self.matching_service = matching_service or MatchingService(settings=self.settings)
         self.classifier = RelationshipClassifier(llm_provider=self.llm_provider)
 
+    async def reason_dataset_relationships(
+        self,
+        dataset_id: str,
+        top_k_candidates: int = 5,
+        min_similarity: float = 0.65,
+        require_cross_document: bool = False,
+    ) -> list[FactRelationshipResponse]:
+        """Execute candidate matching and hybrid reasoning for a dataset."""
+        return await self.reason_candidate_pairs_in_dataset(
+            dataset_id=dataset_id,
+            min_similarity=min_similarity,
+            require_cross_document=require_cross_document,
+        )
+
     async def reason_candidate_pairs_in_dataset(
         self,
         dataset_id: str,

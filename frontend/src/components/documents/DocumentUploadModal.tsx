@@ -1,6 +1,7 @@
-import React, { useState, useRef } from "react";
-import { Upload, FileUp, CheckCircle, AlertCircle, Loader2 } from "lucide-react";
+import React, { useState, useRef, useEffect } from "react";
+import { Upload, FileUp, CheckCircle, AlertCircle, Loader2, Database } from "lucide-react";
 import { api } from "@/api/client";
+import { DatasetResponse } from "@/api/types";
 import { Dialog } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { formatBytes } from "@/lib/formatters";
@@ -23,7 +24,25 @@ export function DocumentUploadModal({
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [datasets, setDatasets] = useState<DatasetResponse[]>([]);
+  const [targetDatasetId, setTargetDatasetId] = useState<string>("");
+  const [newDatasetName, setNewDatasetName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isOpen) {
+      api.getDatasets()
+        .then((ds) => {
+          setDatasets(ds);
+          if (datasetId && datasetId !== "all") {
+            setTargetDatasetId(datasetId);
+          } else if (ds.length > 0) {
+            setTargetDatasetId(ds[0].id);
+          }
+        })
+        .catch(console.error);
+    }
+  }, [isOpen, datasetId]);
 
   const handleFileDrop = (e: React.DragEvent) => {
     e.preventDefault();
@@ -48,7 +67,18 @@ export function DocumentUploadModal({
     setIsUploading(true);
     setError(null);
     try {
-      const resp = await api.uploadDocument(file, datasetId);
+      let finalDatasetId = targetDatasetId;
+      if (targetDatasetId === "NEW") {
+        if (!newDatasetName.trim()) {
+          setError("Please enter a name for the new dataset.");
+          setIsUploading(false);
+          return;
+        }
+        const newDs = await api.createDataset(newDatasetName.trim());
+        finalDatasetId = newDs.id;
+      }
+
+      const resp = await api.uploadDocument(file, finalDatasetId || undefined);
       setSuccessMessage(
         resp.is_duplicate
           ? `File '${file.name}' already ingested (${resp.pages_extracted} pages verified).`
@@ -75,6 +105,37 @@ export function DocumentUploadModal({
       description="Ingest a new PDF to extract pages and prepare for evidence-grounded fact extraction."
     >
       <div className="space-y-4 pt-2">
+        {/* Target Dataset Selection */}
+        <div className="p-3 rounded-lg border border-border/70 bg-muted/20 space-y-2">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
+            <Database className="h-3.5 w-3.5 text-primary" />
+            <span>Target Dataset</span>
+          </div>
+          <select
+            value={targetDatasetId}
+            onChange={(e) => setTargetDatasetId(e.target.value)}
+            disabled={isUploading}
+            className="w-full h-8 px-2.5 rounded-md border border-input bg-background text-xs font-medium text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+          >
+            {datasets.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name} ({d.document_count ?? 0} docs, {d.fact_count ?? 0} facts)
+              </option>
+            ))}
+            <option value="NEW">+ Create New Dataset...</option>
+          </select>
+
+          {targetDatasetId === "NEW" && (
+            <input
+              type="text"
+              placeholder="e.g. india-macroeconomy"
+              value={newDatasetName}
+              onChange={(e) => setNewDatasetName(e.target.value)}
+              disabled={isUploading}
+              className="w-full h-8 px-2.5 rounded-md border border-input bg-background text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+            />
+          )}
+        </div>
         {/* Dropzone */}
         <div
           onDragOver={(e) => {

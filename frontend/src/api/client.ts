@@ -81,7 +81,7 @@ export const api = {
   uploadDocument: async (
     file: File,
     datasetId?: string,
-    datasetName = "Delhivery Financials"
+    datasetName = "delhivery"
   ): Promise<DocumentUploadResponse> => {
     const formData = new FormData();
     formData.append("file", file);
