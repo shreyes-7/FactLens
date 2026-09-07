@@ -210,8 +210,9 @@ artifacts/
 
 # Extracted/generated document data
 extracted/
-embeddings/
+/embeddings/
 cache/
+
 
 # ------------------------------------------------------------
 # Database local files
