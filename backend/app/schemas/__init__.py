@@ -15,6 +15,21 @@ from backend.app.schemas.relationship import (
     LLMReasoningOutput,
     RelationshipType,
 )
+from backend.app.schemas.api import (
+    HealthResponse,
+    DatasetResponse,
+    DatasetCreateRequest,
+    DocumentResponse,
+    DocumentDetailResponse,
+    DocumentUploadResponse,
+    ProcessingRequest,
+    ProcessingResponse,
+    FactWithEvidenceResponse,
+    FactsListResponse,
+    RelationshipWithDetailsResponse,
+    RelationshipsListResponse,
+    FourCasesResponse,
+)
 
 __all__ = [
     "CandidatePair",
@@ -34,5 +49,18 @@ __all__ = [
     "FactRelationshipResponse",
     "LLMReasoningOutput",
     "RelationshipType",
+    "HealthResponse",
+    "DatasetResponse",
+    "DatasetCreateRequest",
+    "DocumentResponse",
+    "DocumentDetailResponse",
+    "DocumentUploadResponse",
+    "ProcessingRequest",
+    "ProcessingResponse",
+    "FactWithEvidenceResponse",
+    "FactsListResponse",
+    "RelationshipWithDetailsResponse",
+    "RelationshipsListResponse",
+    "FourCasesResponse",
 ]
 

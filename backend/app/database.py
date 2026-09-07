@@ -628,5 +628,459 @@ def get_fact_evidence_quote(fact_id: str, settings: Settings | None = None) -> s
         conn.close()
 
 
+def get_all_datasets(settings: Settings | None = None) -> list[dict[str, Any]]:
+    """Retrieve all datasets with document, fact, and relationship counts."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT 
+            d.id, 
+            d.name, 
+            d.description, 
+            d.created_at,
+            (SELECT COUNT(*) FROM public.documents doc WHERE doc.dataset_id = d.id) AS document_count,
+            (SELECT COUNT(*) FROM public.facts f WHERE f.dataset_id = d.id) AS fact_count,
+            (
+                SELECT COUNT(*) 
+                FROM public.fact_relationships r
+                JOIN public.facts fa ON r.fact_a_id = fa.id
+                WHERE fa.dataset_id = d.id
+            ) AS relationship_count
+        FROM public.datasets d
+        ORDER BY d.created_at DESC;
+    """
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query)
+            return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_dataset_by_id(dataset_id: str, settings: Settings | None = None) -> dict[str, Any] | None:
+    """Retrieve a single dataset by ID with counts."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT 
+            d.id, 
+            d.name, 
+            d.description, 
+            d.created_at,
+            (SELECT COUNT(*) FROM public.documents doc WHERE doc.dataset_id = d.id) AS document_count,
+            (SELECT COUNT(*) FROM public.facts f WHERE f.dataset_id = d.id) AS fact_count,
+            (
+                SELECT COUNT(*) 
+                FROM public.fact_relationships r
+                JOIN public.facts fa ON r.fact_a_id = fa.id
+                WHERE fa.dataset_id = d.id
+            ) AS relationship_count
+        FROM public.datasets d
+        WHERE d.id = %s;
+    """
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (dataset_id,))
+            row = cur.fetchone()
+            return dict(row) if row else None
+    finally:
+        conn.close()
+
+
+def get_all_documents(dataset_id: str | None = None, settings: Settings | None = None) -> list[dict[str, Any]]:
+    """Retrieve documents optionally filtered by dataset."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT 
+            d.id, 
+            d.dataset_id, 
+            d.filename, 
+            COALESCE(d.page_count, 0) AS page_count, 
+            COALESCE((d.metadata->>'file_size_bytes')::bigint, 0) AS file_size_bytes, 
+            d.storage_path, 
+            COALESCE((SELECT status FROM public.processing_runs pr WHERE pr.document_id = d.id ORDER BY pr.created_at DESC LIMIT 1), 'ingested') AS status, 
+            d.created_at
+        FROM public.documents d
+    """
+    params: list[Any] = []
+    if dataset_id:
+        query += " WHERE d.dataset_id = %s"
+        params.append(dataset_id)
+    query += " ORDER BY d.created_at DESC;"
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def get_document_detail(document_id: str, settings: Settings | None = None) -> dict[str, Any] | None:
+    """Retrieve detailed document metadata including fact counts and processing runs."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(
+                """
+                SELECT 
+                    d.id, 
+                    d.dataset_id, 
+                    d.filename, 
+                    COALESCE(d.page_count, 0) AS page_count, 
+                    COALESCE((d.metadata->>'file_size_bytes')::bigint, 0) AS file_size_bytes, 
+                    d.storage_path, 
+                    COALESCE((SELECT status FROM public.processing_runs pr WHERE pr.document_id = d.id ORDER BY pr.created_at DESC LIMIT 1), 'ingested') AS status, 
+                    d.created_at
+                FROM public.documents d
+                WHERE d.id = %s;
+                """,
+                (document_id,),
+            )
+            doc = cur.fetchone()
+            if not doc:
+                return None
+            res = dict(doc)
+
+            # Fact count
+            cur.execute("SELECT COUNT(*) AS total FROM public.facts WHERE document_id = %s;", (document_id,))
+            res["total_facts_extracted"] = cur.fetchone()["total"]
+
+            # Chunk count
+            cur.execute("SELECT COUNT(*) AS total FROM public.chunks WHERE document_id = %s;", (document_id,))
+            res["total_chunks"] = cur.fetchone()["total"]
+
+            # Processing runs
+            cur.execute(
+                """
+                SELECT id, status, pages_processed, chunks_created, facts_extracted, facts_rejected, error_code, error_message, started_at, completed_at
+                FROM public.processing_runs
+                WHERE document_id = %s
+                ORDER BY started_at DESC
+                LIMIT 10;
+                """,
+                (document_id,),
+            )
+            res["processing_runs"] = [dict(r) for r in cur.fetchall()]
+            return res
+    finally:
+        conn.close()
+
+
+def get_facts_with_evidence(
+    dataset_id: str | None = None,
+    document_id: str | None = None,
+    category: str | None = None,
+    entity: str | None = None,
+    search: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
+    settings: Settings | None = None,
+) -> tuple[int, list[dict[str, Any]]]:
+    """
+    Retrieve facts with pagination, filtering, and joined evidence quotes and document metadata.
+    Returns (total_count, facts_list).
+    """
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+
+    where_clauses: list[str] = []
+    params: list[Any] = []
+
+    if dataset_id:
+        where_clauses.append("f.dataset_id = %s")
+        params.append(dataset_id)
+    if document_id:
+        where_clauses.append("f.document_id = %s")
+        params.append(document_id)
+    if category:
+        where_clauses.append("COALESCE(f.metadata->>'category', f.fact_type) = %s")
+        params.append(category)
+    if entity:
+        where_clauses.append("f.subject ILIKE %s")
+        params.append(f"%{entity}%")
+    if search:
+        where_clauses.append("(f.subject ILIKE %s OR f.predicate ILIKE %s OR f.raw_claim ILIKE %s)")
+        params.extend([f"%{search}%", f"%{search}%", f"%{search}%"])
+
+    where_sql = ("WHERE " + " AND ".join(where_clauses)) if where_clauses else ""
+
+    count_query = f"SELECT COUNT(*) AS total FROM public.facts f {where_sql};"
+
+    data_query = f"""
+        SELECT 
+            f.id,
+            f.document_id,
+            d.filename AS document_filename,
+            COALESCE(dp.pdf_page_number, (f.metadata->>'page_number')::int) AS page_number,
+            dp.printed_page_number,
+            f.subject AS entity,
+            COALESCE(f.metadata->>'category', f.fact_type) AS category,
+            f.predicate,
+            f.raw_claim AS raw_value,
+            COALESCE(f.normalized_value_numeric, f.value_numeric) AS normalized_value,
+            COALESCE(f.normalized_unit, f.unit) AS unit,
+            f.period_text AS time_period,
+            f.scope,
+            f.status,
+            f.confidence AS confidence_score,
+            f.created_at
+        FROM public.facts f
+        LEFT JOIN public.documents d ON f.document_id = d.id
+        LEFT JOIN LATERAL (
+            SELECT dp.pdf_page_number, dp.printed_page_number
+            FROM public.evidence e
+            JOIN public.document_pages dp ON e.page_id = dp.id
+            WHERE e.fact_id = f.id
+            LIMIT 1
+        ) dp ON true
+        {where_sql}
+        ORDER BY f.created_at DESC
+        LIMIT %s OFFSET %s;
+    """
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(count_query, params)
+            total = cur.fetchone()["total"]
+
+            cur.execute(data_query, params + [limit, offset])
+            facts = [dict(r) for r in cur.fetchall()]
+
+            # Fetch evidence for all returned facts in one batch
+            if facts:
+                fact_ids = [str(f["id"]) for f in facts]
+                cur.execute(
+                    """
+                    SELECT 
+                        e.id, 
+                        e.fact_id, 
+                        e.quote, 
+                        dp.pdf_page_number AS page_number, 
+                        dp.printed_page_number, 
+                        e.start_offset AS char_start, 
+                        e.end_offset AS char_end, 
+                        e.extraction_confidence AS similarity_score
+                    FROM public.evidence e
+                    LEFT JOIN public.document_pages dp ON e.page_id = dp.id
+                    WHERE e.fact_id = ANY(%s::uuid[])
+                    ORDER BY e.created_at ASC;
+                    """,
+                    (fact_ids,),
+                )
+                evidence_by_fact: dict[str, list[dict[str, Any]]] = {}
+                for ev in cur.fetchall():
+                    fid = str(ev["fact_id"])
+                    if fid not in evidence_by_fact:
+                        evidence_by_fact[fid] = []
+                    evidence_by_fact[fid].append(dict(ev))
+
+                for f in facts:
+                    fid = str(f["id"])
+                    f["evidence"] = evidence_by_fact.get(fid, [])
+                    if f["evidence"] and not f.get("quote"):
+                        f["quote"] = f["evidence"][0]["quote"]
+            return total, facts
+    finally:
+        conn.close()
+
+
+def get_fact_detail(fact_id: str, settings: Settings | None = None) -> dict[str, Any] | None:
+    """Retrieve full details of a fact including evidence items and source document."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT 
+            f.id,
+            f.document_id,
+            d.filename AS document_filename,
+            COALESCE(dp.pdf_page_number, (f.metadata->>'page_number')::int) AS page_number,
+            dp.printed_page_number,
+            f.subject AS entity,
+            COALESCE(f.metadata->>'category', f.fact_type) AS category,
+            f.predicate,
+            f.raw_claim AS raw_value,
+            COALESCE(f.normalized_value_numeric, f.value_numeric) AS normalized_value,
+            COALESCE(f.normalized_unit, f.unit) AS unit,
+            f.period_text AS time_period,
+            f.scope,
+            f.status,
+            f.confidence AS confidence_score,
+            f.created_at
+        FROM public.facts f
+        LEFT JOIN public.documents d ON f.document_id = d.id
+        LEFT JOIN LATERAL (
+            SELECT dp.pdf_page_number, dp.printed_page_number
+            FROM public.evidence e
+            JOIN public.document_pages dp ON e.page_id = dp.id
+            WHERE e.fact_id = f.id
+            LIMIT 1
+        ) dp ON true
+        WHERE f.id = %s;
+    """
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, (fact_id,))
+            fact = cur.fetchone()
+            if not fact:
+                return None
+            res = dict(fact)
+
+            cur.execute(
+                """
+                SELECT 
+                    e.id, 
+                    e.quote, 
+                    dp.pdf_page_number AS page_number, 
+                    dp.printed_page_number, 
+                    e.start_offset AS char_start, 
+                    e.end_offset AS char_end, 
+                    e.extraction_confidence AS similarity_score
+                FROM public.evidence e
+                LEFT JOIN public.document_pages dp ON e.page_id = dp.id
+                WHERE e.fact_id = %s
+                ORDER BY e.created_at ASC;
+                """,
+                (fact_id,),
+            )
+            res["evidence"] = [dict(r) for r in cur.fetchall()]
+            if res["evidence"]:
+                res["quote"] = res["evidence"][0]["quote"]
+            return res
+    finally:
+        conn.close()
+
+
+def get_relationships_detailed(
+    dataset_id: str | None = None,
+    relationship_type: str | None = None,
+    min_confidence: float = 0.0,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    """Retrieve relationships with full joined Fact A and Fact B metadata and quotes."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+
+    query = """
+        SELECT 
+            r.id,
+            r.fact_a_id,
+            r.fact_b_id,
+            r.relationship_type,
+            r.confidence,
+            r.reason AS rationale,
+            r.contextual_factors,
+            r.created_at,
+            -- Fact A
+            fa.subject AS fa_entity,
+            fa.predicate AS fa_predicate,
+            fa.raw_claim AS fa_raw_value,
+            COALESCE(fa.normalized_value_numeric, fa.value_numeric) AS fa_normalized_value,
+            COALESCE(fa.normalized_unit, fa.unit) AS fa_unit,
+            fa.period_text AS fa_time_period,
+            fa.scope AS fa_scope,
+            fa.status AS fa_status,
+            COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) AS fa_page_number,
+            da.filename AS fa_document_filename,
+            -- Fact B
+            fb.subject AS fb_entity,
+            fb.predicate AS fb_predicate,
+            fb.raw_claim AS fb_raw_value,
+            COALESCE(fb.normalized_value_numeric, fb.value_numeric) AS fb_normalized_value,
+            COALESCE(fb.normalized_unit, fb.unit) AS fb_unit,
+            fb.period_text AS fb_time_period,
+            fb.scope AS fb_scope,
+            fb.status AS fb_status,
+            COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int) AS fb_page_number,
+            db.filename AS fb_document_filename,
+            -- Quotes
+            (SELECT quote FROM public.evidence ea WHERE ea.fact_id = fa.id ORDER BY ea.created_at ASC LIMIT 1) AS evidence_a_quote,
+            (SELECT quote FROM public.evidence eb WHERE eb.fact_id = fb.id ORDER BY eb.created_at ASC LIMIT 1) AS evidence_b_quote
+        FROM public.fact_relationships r
+        JOIN public.facts fa ON r.fact_a_id = fa.id
+        JOIN public.facts fb ON r.fact_b_id = fb.id
+        LEFT JOIN public.documents da ON fa.document_id = da.id
+        LEFT JOIN public.documents db ON fb.document_id = db.id
+        LEFT JOIN LATERAL (
+            SELECT dp.pdf_page_number FROM public.evidence ea
+            JOIN public.document_pages dp ON ea.page_id = dp.id
+            WHERE ea.fact_id = fa.id LIMIT 1
+        ) dpa ON true
+        LEFT JOIN LATERAL (
+            SELECT dp.pdf_page_number FROM public.evidence eb
+            JOIN public.document_pages dp ON eb.page_id = dp.id
+            WHERE eb.fact_id = fb.id LIMIT 1
+        ) dpb ON true
+    """
+    where_clauses: list[str] = []
+    params: list[Any] = []
+
+    if dataset_id:
+        where_clauses.append("fa.dataset_id = %s")
+        params.append(dataset_id)
+    if relationship_type:
+        where_clauses.append("r.relationship_type = %s")
+        params.append(relationship_type)
+    if min_confidence > 0.0:
+        where_clauses.append("r.confidence >= %s")
+        params.append(min_confidence)
+
+    if where_clauses:
+        query += " WHERE " + " AND ".join(where_clauses)
+
+    query += " ORDER BY r.confidence DESC, r.created_at DESC;"
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            results = []
+            for row in cur.fetchall():
+                results.append({
+                    "id": row["id"],
+                    "fact_a_id": row["fact_a_id"],
+                    "fact_b_id": row["fact_b_id"],
+                    "relationship_type": row["relationship_type"],
+                    "confidence": float(row["confidence"]),
+                    "rationale": row["rationale"],
+                    "contextual_factors": row["contextual_factors"] or {},
+                    "created_at": row["created_at"],
+                    "evidence_a_quote": row["evidence_a_quote"],
+                    "evidence_b_quote": row["evidence_b_quote"],
+                    "fact_a": {
+                        "id": row["fact_a_id"],
+                        "document_filename": row["fa_document_filename"],
+                        "page_number": row["fa_page_number"],
+                        "entity": row["fa_entity"],
+                        "predicate": row["fa_predicate"],
+                        "raw_value": row["fa_raw_value"],
+                        "normalized_value": float(row["fa_normalized_value"]) if row["fa_normalized_value"] is not None else None,
+                        "unit": row["fa_unit"],
+                        "time_period": row["fa_time_period"],
+                        "scope": row["fa_scope"],
+                        "status": row["fa_status"],
+                        "quote": row["evidence_a_quote"],
+                    },
+                    "fact_b": {
+                        "id": row["fact_b_id"],
+                        "document_filename": row["fb_document_filename"],
+                        "page_number": row["fb_page_number"],
+                        "entity": row["fb_entity"],
+                        "predicate": row["fb_predicate"],
+                        "raw_value": row["fb_raw_value"],
+                        "normalized_value": float(row["fb_normalized_value"]) if row["fb_normalized_value"] is not None else None,
+                        "unit": row["fb_unit"],
+                        "time_period": row["fb_time_period"],
+                        "scope": row["fb_scope"],
+                        "status": row["fb_status"],
+                        "quote": row["evidence_b_quote"],
+                    },
+                })
+            return results
+    finally:
+        conn.close()
+
+
 
 
