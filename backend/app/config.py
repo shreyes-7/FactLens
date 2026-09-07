@@ -75,8 +75,36 @@ class Settings(BaseSettings):
         description="Jina API key. Required when embedding_provider='jina'.",
     )
 
-    # Observability
+    # Observability & Logging
     logfire_token: str | None = None
+    log_format: Literal["json", "text"] = Field(
+        default="text",
+        description="Logging format: 'json' for production structured logs, 'text' for development.",
+    )
+
+    # Security & Throttling
+    rate_limit_enabled: bool = Field(
+        default=True,
+        description="Enable per-IP sliding window rate limiting.",
+    )
+    rate_limit_per_minute: int = Field(
+        default=120,
+        description="Maximum allowed requests per minute per IP address.",
+    )
+    security_headers_enabled: bool = Field(
+        default=True,
+        description="Inject security response headers (nosniff, DENY, etc.).",
+    )
+    allowed_cors_origins: list[str] = Field(
+        default_factory=lambda: [
+            "http://localhost:5173",
+            "http://localhost:3000",
+            "http://127.0.0.1:5173",
+            "http://127.0.0.1:3000",
+            "*",
+        ],
+        description="Allowed CORS origin URLs.",
+    )
 
     # Processing Defaults
     max_file_size_mb: int = 50

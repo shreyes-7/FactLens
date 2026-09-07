@@ -14,6 +14,7 @@ from backend.app.schemas.api import (
     ProcessingRequest,
     ProcessingResponse,
 )
+from backend.app.security.file_validation import validate_pdf_file
 from backend.app.services.ingestion_service import IngestionService
 from backend.app.services.processing_service import ProcessingService
 
@@ -58,12 +59,12 @@ async def upload_document(
     3. Persists document and page records to database.
     4. Handles file hash deduplication gracefully.
     """
-    if not file.filename.lower().endswith(".pdf"):
-        raise HTTPException(status_code=400, detail="Only PDF files (.pdf) are supported.")
-
     file_bytes = await file.read()
-    if not file_bytes:
-        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+    sanitized_filename = validate_pdf_file(
+        filename=file.filename or "document.pdf",
+        file_bytes=file_bytes,
+        max_file_size_mb=settings.max_file_size_mb,
+    )
 
     ingestion_service = IngestionService(settings=settings)
 
@@ -74,7 +75,7 @@ async def upload_document(
     try:
         result = await ingestion_service.ingest_pdf(
             file_bytes=file_bytes,
-            filename=file.filename,
+            filename=sanitized_filename,
             dataset_id=target_dataset_id,
         )
     except Exception as e:
