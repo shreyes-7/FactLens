@@ -398,3 +398,118 @@ def update_fact_normalization(
         conn.close()
 
 
+def update_fact_embedding(
+    fact_id: str,
+    embedding: list[float],
+    settings: Settings | None = None,
+) -> None:
+    """Store 1024-dimensional vector embedding for a fact."""
+    cfg = settings or get_settings()
+    if len(embedding) != cfg.embedding_dimension:
+        raise ValueError(
+            f"Fact embedding dimension mismatch: got {len(embedding)}, expected {cfg.embedding_dimension}."
+        )
+
+    embedding_str = "[" + ",".join(str(f) for f in embedding) + "]"
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    query = """
+        UPDATE public.facts
+        SET embedding = %s::vector,
+            updated_at = now()
+        WHERE id = %s;
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (embedding_str, fact_id))
+    finally:
+        conn.close()
+
+
+def get_facts_for_matching(
+    dataset_id: str | None = None,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Retrieve facts with parsed float vector embeddings for candidate matching.
+    """
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        SELECT id, dataset_id, document_id, subject, predicate, raw_claim,
+               value_text, raw_value_text, value_numeric, normalized_value_numeric,
+               value_boolean, unit, normalized_unit, fact_type, period_text,
+               period_start, period_end, scope, geography, segment, status,
+               attribution, qualifiers, confidence, metadata,
+               embedding::text as embedding_str
+        FROM public.facts
+    """
+    params: list[Any] = []
+    if dataset_id:
+        query += " WHERE dataset_id = %s"
+        params.append(dataset_id)
+    query += " ORDER BY created_at ASC;"
+
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            rows = [dict(r) for r in cur.fetchall()]
+            for r in rows:
+                emb_str = r.pop("embedding_str", None)
+                if emb_str and emb_str.startswith("[") and emb_str.endswith("]"):
+                    r["embedding"] = [float(x) for x in emb_str[1:-1].split(",") if x.strip()]
+                else:
+                    r["embedding"] = None
+            return rows
+    finally:
+        conn.close()
+
+
+def find_candidate_facts_pgvector(
+    fact_id: str,
+    dataset_id: str,
+    embedding: list[float],
+    top_k: int = 10,
+    min_similarity: float = 0.5,
+    cross_document_only: bool = True,
+    settings: Settings | None = None,
+) -> list[dict[str, Any]]:
+    """
+    Execute pgvector cosine distance query to retrieve nearest neighbor facts.
+    """
+    cfg = settings or get_settings()
+    embedding_str = "[" + ",".join(str(f) for f in embedding) + "]"
+
+    query = """
+        SELECT id, dataset_id, document_id, subject, predicate, raw_claim,
+               value_numeric, normalized_value_numeric, unit, normalized_unit,
+               period_text, period_start, period_end,
+               (1 - (embedding <=> %s::vector)) AS similarity
+        FROM public.facts
+        WHERE dataset_id = %s
+          AND id != %s
+          AND embedding IS NOT NULL
+    """
+    params: list[Any] = [embedding_str, dataset_id, fact_id]
+
+    if cross_document_only:
+        query += " AND document_id != (SELECT document_id FROM public.facts WHERE id = %s)"
+        params.append(fact_id)
+
+    query += """
+          AND (1 - (embedding <=> %s::vector)) >= %s
+        ORDER BY (embedding <=> %s::vector) ASC
+        LIMIT %s;
+    """
+    params.extend([embedding_str, min_similarity, embedding_str, top_k])
+
+    conn = get_db_connection(cfg)
+    try:
+        with conn.cursor(cursor_factory=RealDictCursor) as cur:
+            cur.execute(query, params)
+            return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+
