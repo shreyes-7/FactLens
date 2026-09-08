@@ -40,8 +40,8 @@ class ReasoningService:
     async def reason_dataset_relationships(
         self,
         dataset_id: str,
-        top_k_candidates: int = 5,
-        min_similarity: float = 0.65,
+        top_k_candidates: int = 20,
+        min_similarity: float = 0.60,
         require_cross_document: bool = True,
     ) -> list[FactRelationshipResponse]:
         """Execute candidate matching and hybrid reasoning for a dataset."""
@@ -49,6 +49,7 @@ class ReasoningService:
             dataset_id=dataset_id,
             min_similarity=min_similarity,
             require_cross_document=require_cross_document,
+            max_candidates=top_k_candidates,
         )
 
     async def reason_candidate_pairs_in_dataset(
@@ -56,6 +57,7 @@ class ReasoningService:
         dataset_id: str,
         min_similarity: float = 0.45,
         require_cross_document: bool = True,
+        max_candidates: int | None = 20,
     ) -> list[FactRelationshipResponse]:
         """
         Discover candidate fact pairs, classify their relationships, and persist to database.
@@ -77,9 +79,14 @@ class ReasoningService:
         facts_by_id = {str(f["id"]): f for f in all_facts}
 
         classified_relationships: list[FactRelationshipResponse] = []
+        candidates_to_process = (
+            match_response.candidates[:max_candidates]
+            if max_candidates
+            else match_response.candidates
+        )
 
         # 3. Classify each pair
-        for pair in match_response.candidates:
+        for pair in candidates_to_process:
             id_a = str(pair.fact_a_id)
             id_b = str(pair.fact_b_id)
 
