@@ -3,7 +3,7 @@
 > A deterministic, evidence-grounded Fact Knowledge Layer that extracts atomic, verifiable facts from complex corporate PDF disclosures, normalizes them into canonical representations, and discovers cross-document relationships (corroborations, contradictions, and contextual reconciliations).
 
 - **Live Deployed Application**: [https://factlens-zeta.vercel.app/](https://factlens-zeta.vercel.app/)
-- **Video Demo**: [Watch 3-minute Demo Video](YOUR_VIDEO_LINK_HERE) *(Placeholder for demo video)*
+- **Video Demo**: [Watch 3-minute Demo Video](https://drive.google.com/file/d/184Bc8NbtclCtUGSB-XuCrlxhRSpjW0xK/view?usp=drivesdk) *(Placeholder for demo video)*
 - **GitHub Repository**: [https://github.com/shreyes-7/FactLens](https://github.com/shreyes-7/FactLens)
 
 ---
