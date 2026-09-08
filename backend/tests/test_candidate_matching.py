@@ -13,6 +13,7 @@ from backend.app.matching.filters import (
     check_dataset_boundary,
     check_metric_compatibility,
     check_non_self,
+    check_not_same_page,
     check_predicate_alignment,
     check_temporal_compatibility,
     is_candidate_pair,
@@ -212,4 +213,26 @@ def test_generate_fact_embedding_text():
     assert "Claim: FY24 EBITDA reached Rs. 127 Cr" in emb_text
     assert "Period: FY24" in emb_text
     assert "Unit: INR" in emb_text
+
+
+def test_check_not_same_page():
+    doc1 = str(uuid4())
+    doc2 = str(uuid4())
+
+    # Same doc, same page -> should be rejected
+    f1 = {"document_id": doc1, "page_number": 17}
+    f2 = {"document_id": doc1, "page_number": 17}
+    assert check_not_same_page(f1, f2) is False
+
+    # Same doc, different page -> allowed
+    f3 = {"document_id": doc1, "page_number": 18}
+    assert check_not_same_page(f1, f3) is True
+
+    # Different docs, same page number -> allowed (cross-document comparison)
+    f4 = {"document_id": doc2, "page_number": 17}
+    assert check_not_same_page(f1, f4) is True
+
+    # Nested metadata page_number fallback
+    f5 = {"document_id": doc1, "metadata": {"page_number": 17}}
+    assert check_not_same_page(f1, f5) is False
 

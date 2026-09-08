@@ -454,24 +454,30 @@ def get_facts_for_matching(
     settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Retrieve facts with parsed float vector embeddings for candidate matching.
+    Retrieve facts with parsed float vector embeddings and page numbers for candidate matching.
     """
     cfg = settings or get_settings()
     conn = get_db_connection(cfg)
     query = """
-        SELECT id, dataset_id, document_id, subject, predicate, raw_claim,
-               value_text, raw_value_text, value_numeric, normalized_value_numeric,
-               value_boolean, unit, normalized_unit, fact_type, period_text,
-               period_start, period_end, scope, geography, segment, status,
-               attribution, qualifiers, confidence, metadata,
-               embedding::text as embedding_str
-        FROM public.facts
+        SELECT f.id, f.dataset_id, f.document_id, f.subject, f.predicate, f.raw_claim,
+               f.value_text, f.raw_value_text, f.value_numeric, f.normalized_value_numeric,
+               f.value_boolean, f.unit, f.normalized_unit, f.fact_type, f.period_text,
+               f.period_start, f.period_end, f.scope, f.geography, f.segment, f.status,
+               f.attribution, f.qualifiers, f.confidence, f.metadata,
+               COALESCE(dp.pdf_page_number, (f.metadata->>'page_number')::int) AS page_number,
+               f.embedding::text as embedding_str
+        FROM public.facts f
+        LEFT JOIN LATERAL (
+            SELECT dp.pdf_page_number FROM public.evidence e
+            JOIN public.document_pages dp ON e.page_id = dp.id
+            WHERE e.fact_id = f.id LIMIT 1
+        ) dp ON true
     """
     params: list[Any] = []
     if dataset_id:
-        query += " WHERE dataset_id = %s"
+        query += " WHERE f.dataset_id = %s"
         params.append(dataset_id)
-    query += " ORDER BY created_at ASC;"
+    query += " ORDER BY f.created_at ASC;"
 
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -997,6 +1003,8 @@ def get_relationships_detailed(
     dataset_id: str | None = None,
     relationship_type: str | None = None,
     min_confidence: float = 0.0,
+    cross_document_only: bool = False,
+    exclude_same_page: bool = True,
     settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
     """Retrieve relationships with full joined Fact A and Fact B metadata and quotes."""
@@ -1066,6 +1074,15 @@ def get_relationships_detailed(
     if min_confidence > 0.0:
         where_clauses.append("r.confidence >= %s")
         params.append(min_confidence)
+    if cross_document_only:
+        where_clauses.append("fa.document_id != fb.document_id")
+    elif exclude_same_page:
+        where_clauses.append("""(
+            fa.document_id != fb.document_id 
+            OR COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) != COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int)
+            OR COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) IS NULL
+            OR COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int) IS NULL
+        )""")
 
     if where_clauses:
         query += " WHERE " + " AND ".join(where_clauses)
@@ -1120,7 +1137,40 @@ def get_relationships_detailed(
             return results
     finally:
         conn.close()
-
-
-
-
+def cleanup_same_page_relationships(settings: Settings | None = None) -> int:
+    """
+    Purge noisy relationships where Fact A and Fact B originate from the exact same page
+    of the exact same document.
+    """
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    query = """
+        DELETE FROM public.fact_relationships
+        WHERE id IN (
+            SELECT r.id
+            FROM public.fact_relationships r
+            JOIN public.facts fa ON r.fact_a_id = fa.id
+            JOIN public.facts fb ON r.fact_b_id = fb.id
+            LEFT JOIN LATERAL (
+                SELECT dp.pdf_page_number FROM public.evidence ea
+                JOIN public.document_pages dp ON ea.page_id = dp.id
+                WHERE ea.fact_id = fa.id LIMIT 1
+            ) dpa ON true
+            LEFT JOIN LATERAL (
+                SELECT dp.pdf_page_number FROM public.evidence eb
+                JOIN public.document_pages dp ON eb.page_id = dp.id
+                WHERE eb.fact_id = fb.id LIMIT 1
+            ) dpb ON true
+            WHERE fa.document_id = fb.document_id
+              AND COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) = COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int)
+              AND COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) IS NOT NULL
+        );
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query)
+            deleted = cur.rowcount
+            conn.commit()
+            return deleted
+    finally:
+        conn.close()

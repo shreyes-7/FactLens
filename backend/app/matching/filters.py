@@ -30,6 +30,32 @@ def check_cross_document(fact_a: dict[str, Any], fact_b: dict[str, Any]) -> bool
     return bool(doc_a and doc_b and doc_a != doc_b)
 
 
+def check_not_same_page(fact_a: dict[str, Any], fact_b: dict[str, Any]) -> bool:
+    """
+    Check if facts originate from different pages or different documents.
+    Facts from the exact same page of the same document represent intra-page table line items
+    or adjacent sentences, which are trivial and inappropriate for cross-fact comparison.
+    """
+    doc_a = str(fact_a.get("document_id") or "")
+    doc_b = str(fact_b.get("document_id") or "")
+    if not doc_a or not doc_b or doc_a != doc_b:
+        return True
+
+    def get_page(f: dict[str, Any]) -> Any:
+        page = f.get("page_number")
+        if page is None and isinstance(f.get("metadata"), dict):
+            page = f["metadata"].get("page_number")
+        return page
+
+    p_a = get_page(fact_a)
+    p_b = get_page(fact_b)
+
+    if p_a is not None and p_b is not None and p_a == p_b:
+        return False
+    return True
+
+
+
 def check_temporal_compatibility(fact_a: dict[str, Any], fact_b: dict[str, Any]) -> tuple[bool, str]:
     """
     Check whether two facts share or overlap in reporting timeframe.
@@ -142,6 +168,7 @@ def is_candidate_pair(
     fact_a: dict[str, Any],
     fact_b: dict[str, Any],
     require_cross_document: bool = True,
+    exclude_same_page: bool = True,
 ) -> tuple[bool, list[str]]:
     """
     Evaluate all structured filters to determine if two facts form an eligible candidate pair.
@@ -160,6 +187,10 @@ def is_candidate_pair(
     # 3. Cross-document check (if required)
     if require_cross_document and not check_cross_document(fact_a, fact_b):
         return False, ["same_document"]
+
+    # 3b. Same-page same-document check (exclude trivial intra-page pairs)
+    if exclude_same_page and not check_not_same_page(fact_a, fact_b):
+        return False, ["same_page_same_document"]
 
     if check_cross_document(fact_a, fact_b):
         reasons.append("cross_document")

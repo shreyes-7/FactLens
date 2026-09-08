@@ -136,11 +136,15 @@ export const api = {
     datasetId?: string;
     type?: RelationshipType;
     minConfidence?: number;
+    crossDocumentOnly?: boolean;
+    excludeSamePage?: boolean;
   } = {}): Promise<RelationshipsListResponse> => {
     const sp = new URLSearchParams();
     if (params.datasetId) sp.set("dataset_id", params.datasetId);
     if (params.type) sp.set("type", params.type);
     if (params.minConfidence) sp.set("min_confidence", String(params.minConfidence));
+    if (params.crossDocumentOnly !== undefined) sp.set("cross_document_only", String(params.crossDocumentOnly));
+    if (params.excludeSamePage !== undefined) sp.set("exclude_same_page", String(params.excludeSamePage));
 
     const qs = sp.toString() ? `?${sp.toString()}` : "";
     return request<RelationshipsListResponse>(`/relationships${qs}`);

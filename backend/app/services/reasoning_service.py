@@ -42,7 +42,7 @@ class ReasoningService:
         dataset_id: str,
         top_k_candidates: int = 5,
         min_similarity: float = 0.65,
-        require_cross_document: bool = False,
+        require_cross_document: bool = True,
     ) -> list[FactRelationshipResponse]:
         """Execute candidate matching and hybrid reasoning for a dataset."""
         return await self.reason_candidate_pairs_in_dataset(
@@ -55,7 +55,7 @@ class ReasoningService:
         self,
         dataset_id: str,
         min_similarity: float = 0.45,
-        require_cross_document: bool = False,
+        require_cross_document: bool = True,
     ) -> list[FactRelationshipResponse]:
         """
         Discover candidate fact pairs, classify their relationships, and persist to database.
