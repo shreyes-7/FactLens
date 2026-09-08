@@ -42,3 +42,15 @@ def get_dataset(
     if not dataset:
         raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found.")
     return dataset
+
+
+@router.delete("/{dataset_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_dataset_endpoint(
+    dataset_id: UUID,
+    settings: Settings = Depends(get_settings),
+) -> None:
+    """Delete a dataset and cascade its associated items."""
+    from backend.app.database import delete_dataset
+    success = delete_dataset(str(dataset_id), settings)
+    if not success:
+        raise HTTPException(status_code=404, detail=f"Dataset '{dataset_id}' not found.")

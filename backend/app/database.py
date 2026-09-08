@@ -675,12 +675,26 @@ def get_all_datasets(settings: Settings | None = None) -> list[dict[str, Any]]:
                 WHERE fa.dataset_id = d.id
             ) AS relationship_count
         FROM public.datasets d
+        WHERE NOT (d.name ILIKE '%test suite%' AND (SELECT COUNT(*) FROM public.documents doc WHERE doc.dataset_id = d.id) = 0)
         ORDER BY d.created_at DESC;
     """
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
             cur.execute(query)
             return [dict(r) for r in cur.fetchall()]
+    finally:
+        conn.close()
+
+
+def delete_dataset(dataset_id: str, settings: Settings | None = None) -> bool:
+    """Delete a dataset and cascade its associated items."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    try:
+        with conn.cursor() as cur:
+            cur.execute("DELETE FROM public.datasets WHERE id = %s;", (dataset_id,))
+            return cur.rowcount > 0
     finally:
         conn.close()
 

@@ -68,7 +68,6 @@ export function Sidebar({
       label: "Compare Documents",
       icon: ArrowRightLeft,
       count: null,
-      badge: "What Changed?",
     },
     {
       id: "relationships" as NavItem,
@@ -86,7 +85,7 @@ export function Sidebar({
   ];
 
   return (
-    <aside className="w-64 border-r border-border bg-card/60 backdrop-blur-md flex flex-col justify-between h-screen sticky top-0 select-none">
+    <aside className="w-64 shrink-0 border-r border-border bg-card/60 backdrop-blur-md flex flex-col justify-between h-screen sticky top-0 select-none">
       {/* Top: Branding & Navigation */}
       <div>
         {/* Brand Header */}
@@ -127,9 +126,9 @@ export function Sidebar({
                     : "text-muted-foreground hover:bg-muted/70 hover:text-foreground"
                 }`}
               >
-                <div className="flex items-center gap-2.5">
-                  <Icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
-                  <span>{item.label}</span>
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <Icon className={`h-4 w-4 shrink-0 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
+                  <span className="truncate whitespace-nowrap">{item.label}</span>
                 </div>
                 {item.count !== null && item.count !== undefined && item.count > 0 && (
                   <span

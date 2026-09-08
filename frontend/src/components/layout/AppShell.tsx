@@ -163,7 +163,7 @@ export function AppShell() {
           onOpenCases={() => setActiveView("cases")}
         />
 
-        <main className="flex-1 p-6 max-w-7xl w-full mx-auto">
+        <main className={`flex-1 p-6 w-full mx-auto ${activeView === "compare" ? "max-w-[1440px]" : "max-w-7xl"}`}>
           {activeView === "overview" && (
             <OverviewView
               onNavigate={(v) => setActiveView(v)}

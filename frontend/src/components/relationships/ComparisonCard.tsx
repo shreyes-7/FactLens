@@ -43,13 +43,23 @@ export function ComparisonCard({ relationship, onInspectFact, onInvestigate }: C
     fact_b.document_filename &&
     fact_a.document_filename !== fact_b.document_filename;
 
-  // Calculate variance if both have normalized numbers
+  // Calculate variance ONLY for comparable metrics (corroborates, contradicts, contextual_difference)
+  // Never compute misleading numerical variance across distinct "related" metrics (e.g. Revenue vs Depreciation)
   const valA = fact_a.normalized_value;
   const valB = fact_b.normalized_value;
   let varianceText: string | null = null;
   let varianceType: "exact" | "diff" | null = null;
 
-  if (valA !== null && valA !== undefined && valB !== null && valB !== undefined) {
+  const typeUpper = String(relationship_type).toUpperCase();
+  const isComparableMetric =
+    typeUpper !== "RELATED" &&
+    typeUpper !== "UNCERTAIN" &&
+    (fact_a.predicate.trim().toLowerCase() === fact_b.predicate.trim().toLowerCase() ||
+      typeUpper === "CONTRADICTS" ||
+      typeUpper === "CORROBORATES" ||
+      typeUpper === "CONTEXTUAL_DIFFERENCE");
+
+  if (isComparableMetric && valA !== null && valA !== undefined && valB !== null && valB !== undefined) {
     const diff = Math.abs(valB - valA);
     const maxVal = Math.max(Math.abs(valA), Math.abs(valB));
     if (diff === 0 || (maxVal > 0 && diff / maxVal < 0.005)) {
@@ -147,7 +157,7 @@ export function ComparisonCard({ relationship, onInspectFact, onInvestigate }: C
         </div>
 
         <div className="flex items-center gap-2">
-          {varianceText && (
+          {varianceText ? (
             <span
               className={`text-[11px] font-mono font-medium px-2 py-0.5 rounded border ${
                 varianceType === "exact"
@@ -157,7 +167,11 @@ export function ComparisonCard({ relationship, onInspectFact, onInvestigate }: C
             >
               {varianceText}
             </span>
-          )}
+          ) : typeUpper === "RELATED" ? (
+            <span className="text-[10px] font-medium px-2 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/50">
+              Distinct Metrics
+            </span>
+          ) : null}
           <div className="flex items-center gap-1 text-[11px] font-mono font-semibold text-foreground/90 bg-muted/60 px-2.5 py-0.5 rounded-full border border-border/60">
             <Sparkles className="h-3 w-3 text-primary" />
             <span>{formatConfidence(confidence)} Confidence</span>

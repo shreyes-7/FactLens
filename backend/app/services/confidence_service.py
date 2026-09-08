@@ -53,18 +53,23 @@ class FactConfidenceService:
         evidence: dict[str, Any] | None = None,
         has_corroboration: bool = False,
     ) -> FactConfidenceResult:
-        score = 0
+        # Base confidence for an extracted document assertion
+        score = 40
         signals: list[ConfidenceSignal] = []
 
-        # 1. Evidence Quote Quality
+        # 1. Evidence Quote Quality (check all aliases and fallback to fact.evidence)
         quote = ""
-        if evidence:
+        if evidence and evidence.get("quote"):
             quote = evidence.get("quote") or ""
-        elif "evidence_quote" in fact:
+        elif fact.get("evidence") and isinstance(fact["evidence"], list) and len(fact["evidence"]) > 0:
+            quote = fact["evidence"][0].get("quote") or ""
+        elif fact.get("quote"):
+            quote = fact.get("quote") or ""
+        elif fact.get("evidence_quote"):
             quote = fact.get("evidence_quote") or ""
 
-        quote_clean = quote.strip()
-        if len(quote_clean) >= 25:
+        quote_clean = str(quote).strip()
+        if len(quote_clean) >= 20:
             score += 20
             signals.append(ConfidenceSignal(
                 signal="Exact Source Evidence",
@@ -76,11 +81,12 @@ class FactConfidenceService:
             score += 10
             signals.append(ConfidenceSignal(
                 signal="Short Evidence Quote",
-                impact=-10,
+                impact=10,
                 status="warn",
-                description=f"Evidence citation is short ({len(quote_clean)} chars), potential partial sentence."
+                description=f"Evidence citation is short ({len(quote_clean)} chars), potential partial snippet."
             ))
         else:
+            score -= 20
             signals.append(ConfidenceSignal(
                 signal="Missing Evidence Citation",
                 impact=-20,
@@ -90,22 +96,30 @@ class FactConfidenceService:
 
         # 2. Page Number Grounding
         page_num = None
-        if evidence:
+        if evidence and (evidence.get("page_number") is not None or evidence.get("pdf_page_number") is not None):
             page_num = evidence.get("page_number") or evidence.get("pdf_page_number")
-        if page_num is None and "page_number" in fact:
+        elif fact.get("evidence") and isinstance(fact["evidence"], list) and len(fact["evidence"]) > 0:
+            page_num = fact["evidence"][0].get("page_number") or fact["evidence"][0].get("pdf_page_number")
+        if page_num is None and fact.get("page_number") is not None:
             page_num = fact.get("page_number")
         if page_num is None and isinstance(fact.get("metadata"), dict):
             page_num = fact["metadata"].get("page_number")
 
-        if page_num is not None and int(page_num) > 0:
-            score += 20
+        try:
+            has_valid_page = page_num is not None and int(page_num) > 0
+        except (ValueError, TypeError):
+            has_valid_page = False
+
+        if has_valid_page:
+            score += 15
             signals.append(ConfidenceSignal(
                 signal="Page Identification",
-                impact=20,
+                impact=15,
                 status="pass",
                 description=f"Directly mapped to PDF Page {page_num} with verified chunk coordinates."
             ))
         else:
+            score -= 10
             signals.append(ConfidenceSignal(
                 signal="Page Unresolved",
                 impact=-10,
@@ -114,84 +128,98 @@ class FactConfidenceService:
             ))
 
         # 3. Temporal Period Specificity
-        period = fact.get("period_text") or fact.get("temporal_period")
-        if period and str(period).strip().lower() not in ("none", "null", "unknown", ""):
-            score += 15
+        period = (
+            fact.get("time_period")
+            or fact.get("period_text")
+            or fact.get("temporal_period")
+            or (fact.get("metadata") or {}).get("period")
+            or (fact.get("metadata") or {}).get("time_period")
+        )
+        if period and str(period).strip().lower() not in ("none", "null", "unknown", "", "n/a"):
+            score += 10
             signals.append(ConfidenceSignal(
                 signal="Period Identified",
-                impact=15,
+                impact=10,
                 status="pass",
                 description=f"Explicit fiscal/calendar interval identified: '{period}'."
             ))
         else:
-            score -= 15
+            score -= 5
             signals.append(ConfidenceSignal(
                 signal="Missing Temporal Period",
-                impact=-15,
+                impact=-5,
                 status="warn",
                 description="Fiscal year or date interval not explicitly specified in claim."
             ))
 
         # 4. Measurement Unit Standardization
-        unit = fact.get("normalized_unit") or fact.get("unit")
+        unit = (
+            fact.get("unit")
+            or fact.get("normalized_unit")
+            or (fact.get("metadata") or {}).get("unit")
+        )
         raw_val = str(fact.get("raw_value") or fact.get("raw_claim") or "")
         is_numeric_claim = (
-            fact.get("normalized_value_numeric") is not None
+            fact.get("normalized_value") is not None
+            or fact.get("normalized_value_numeric") is not None
             or fact.get("value_numeric") is not None
             or any(c.isdigit() for c in raw_val)
         )
 
-        if unit and str(unit).strip().lower() not in ("none", "null", "unknown", ""):
-            score += 15
+        if unit and str(unit).strip().lower() not in ("none", "null", "unknown", "", "n/a"):
+            score += 10
             signals.append(ConfidenceSignal(
                 signal="Unit Standardized",
-                impact=15,
+                impact=10,
                 status="pass",
                 description=f"Standardized metric unit: '{unit}'."
             ))
         elif is_numeric_claim:
-            score -= 10
+            score -= 5
             signals.append(ConfidenceSignal(
                 signal="Missing Metric Unit",
-                impact=-10,
+                impact=-5,
                 status="warn",
                 description="Quantitative figure lacks standardized measurement or currency unit."
             ))
         else:
-            score += 10
+            score += 5
             signals.append(ConfidenceSignal(
                 signal="Qualitative Fact",
-                impact=10,
+                impact=5,
                 status="pass",
                 description="Categorical/semantic statement without requiring metric unit."
             ))
 
         # 5. Reporting Scope Resolution
-        scope = fact.get("scope")
-        if scope and str(scope).strip().lower() not in ("none", "null", "unknown", ""):
-            score += 15
+        scope = fact.get("scope") or (fact.get("metadata") or {}).get("scope")
+        if scope and str(scope).strip().lower() not in ("none", "null", "unknown", "", "actual", "n/a"):
+            score += 5
             signals.append(ConfidenceSignal(
                 signal="Scope Resolved",
-                impact=15,
+                impact=5,
                 status="pass",
                 description=f"Entity reporting scope identified: '{scope}'."
             ))
         else:
-            score -= 10
             signals.append(ConfidenceSignal(
                 signal="Scope Unspecified",
-                impact=-10,
+                impact=0,
                 status="warn",
                 description="Uncertain whether statement applies to Consolidated, Standalone, or Segment."
             ))
 
         # 6. Normalization Success
-        has_numeric = fact.get("normalized_value_numeric") is not None or fact.get("value_numeric") is not None
+        has_numeric = (
+            fact.get("normalized_value") is not None
+            or fact.get("normalized_value_numeric") is not None
+            or fact.get("value_numeric") is not None
+        )
         if has_numeric:
-            score += 10
+            score += 5
             signals.append(ConfidenceSignal(
                 signal="Successful Normalization",
-                impact=10,
+                impact=5,
                 status="pass",
                 description="Numerical magnitude normalized to standard IEEE floating-point."
             ))
@@ -210,10 +238,10 @@ class FactConfidenceService:
         meta = fact.get("metadata") or {}
         if isinstance(meta, dict):
             if meta.get("table_ambiguity") or meta.get("extraction_warning"):
-                score -= 20
+                score -= 15
                 signals.append(ConfidenceSignal(
                     signal="Table Extraction Warning",
-                    impact=-20,
+                    impact=-15,
                     status="fail",
                     description=str(meta.get("extraction_warning") or "Multi-column table structure ambiguity.")
                 ))
@@ -221,10 +249,10 @@ class FactConfidenceService:
         # Clamp score safely to 0-100
         final_score = max(0, min(100, score))
 
-        if final_score >= 90:
+        if final_score >= 80:
             level = "HIGH"
             level_label = "High Confidence"
-        elif final_score >= 70:
+        elif final_score >= 60:
             level = "MEDIUM"
             level_label = "Medium Confidence"
         else:
