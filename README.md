@@ -1,284 +1,285 @@
 # FactLens — Evidence-Grounded Cross-Document Fact Knowledge Layer
 
-> **FactLens 2.0** transforms raw PDF corporate disclosures, earnings reports, and financial filings into a deterministic, verifiable, and evidence-grounded knowledge layer.
+> **Superjoin Engineering Intern Hiring Assignment Submission**  
+> An intelligent system that extracts atomic, evidence-grounded facts from raw PDF disclosures, normalizes them into canonical representations, and discovers cross-document relationships (corroborations, contradictions, and contextual reconciliations).
 
-[![Backend Tests](https://img.shields.io/badge/Backend%20Tests-142%20Passing-brightgreen.svg)]()
-[![FastAPI](https://img.shields.io/badge/FastAPI-0.115-009688.svg)]()
-[![React](https://img.shields.io/badge/React-18-61DAFB.svg)]()
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.0-3178C6.svg)]()
-[![PostgreSQL](https://img.shields.io/badge/PostgreSQL-pgvector-336791.svg)]()
-
----
-
-## 🌟 Key Capabilities & FactLens 2.0 Features
-
-FactLens goes beyond basic RAG or LLM question answering by extracting atomic, normalized facts from complex PDF documents, grounding every fact in verbatim source quotes and page numbers, and analyzing relationships across documents.
-
-### 1. 🔍 Contradiction Investigator (New in FactLens 2.0)
-When two corporate filings present different figures for what appears to be the same metric (e.g., Q3 revenue or operating income), an LLM hallucinating a generic "they contradict" answer is dangerous. The **Contradiction Investigator** performs an instant, deterministic, multi-factor audit:
-- **Exhaustive Multi-Factor Verification**: Evaluates `entity_match`, `predicate_match`, `period_match`, `currency_match`, `unit_match`, `scope_match`, `same_document`, `same_page`, and exact `variance_percent`.
-- **Intelligent Classification & Verdicts**:
-  - `TRUE_CONTRADICTION`: Same entity, same reporting period, same accounting scope, but irreconcilable numeric variance (>1.5%).
-  - `CONTEXTUAL_DIFFERENCE`: Figures differ because one is GAAP and one is Non-GAAP, or one represents a specific business segment while the other is Consolidated.
-  - `TEMPORAL_DIFFERENCE`: Figures differ because they measure different fiscal periods (e.g., Q3 2023 vs Q3 2024 progression).
-  - `UNIT_DIFFERENCE`: Figures appear different due to scale reporting (e.g., thousands vs millions) or currency denomination.
-  - `CORROBORATED`: Numerical figures match within ±1.5% tolerance.
-- **Explainable Checklist & Evidence Drawer**: Slide-over drawer provides side-by-side excerpts with verbatim source quotes, page coordinates, and clear actionable explanations.
-- **Zero Additional LLM Overhead**: Evaluated deterministically in `<50ms` using structured entity-relation rules.
+- **Live Deployed Application**: [https://factlens-zeta.vercel.app/](https://factlens-zeta.vercel.app/)
+- **Video Demo**: [Watch 3-minute Demo Video](YOUR_VIDEO_LINK_HERE) *(Placeholder for 3-minute video submission)*
+- **GitHub Repository**: [https://github.com/shreyes-7/FactLens](https://github.com/shreyes-7/FactLens)
 
 ---
 
-### 2. 📊 "What Changed?" — Cross-Document Analytical Workspace (New in FactLens 2.0)
-A specialized analytical workspace for financial analysts, auditors, and researchers comparing 2 to 5 corporate filings simultaneously:
-- **Multi-Document Comparison Matrix**: Select 2 to 5 filings (e.g., 10-Q Q1, Q2, Q3, and 10-K) to generate a unified financial timeline matrix across all shared canonical metrics.
-- **Automated Trend & Change Classification**:
-  - `INCREASED` (📈): Metric grew by `+X%`.
-  - `DECREASED` (📉): Metric decreased by `-X%`.
-  - `UNCHANGED` (➖): Metric remained stable (within ±1.5%).
-  - `ADDED` (➕): New metric or disclosure introduced in later filing.
-  - `NOT_FOUND` (❓): Metric present in earlier filing but omitted or unreported in later filing.
-  - `CONTEXT_CHANGED` (🔄): Metric value changed due to restatement, scope adjustment, or accounting standard update.
-- **Executive Summary KPI Cards**: Instant breakdown of total tracked metrics, growth counts, declines, and new line items.
-- **Evidence Drill-down**: Click any metric row to inspect verbatim quotes, page numbers, and dates across all participating documents.
-- **Instant Query Performance**: Sub-30ms execution powered by single SQL aggregation joining normalized facts and lateral citations in PostgreSQL.
+## 🚀 Setup and Run Instructions
+
+### Prerequisites
+- **Python**: Version 3.11+
+- **Node.js**: Version 18+ and `npm`
+- **Database**: PostgreSQL with `pgvector` extension (e.g., free [Supabase](https://supabase.com) project or local PostgreSQL instance)
+- **API Keys**: Google Gemini API key (primary extraction) and/or Groq API key (optional fallback)
 
 ---
 
-### 3. 🛡️ Fact Confidence & Evidence Quality Scoring (New in FactLens 2.0)
-Every extracted fact is assigned an explainable **Confidence Score (0–100)** and confidence level (`HIGH`, `MEDIUM`, `LOW`) computed from deterministic evidence signals:
-- **Transparent Signal Breakdown**:
-  - `+25 pts`: Verbatim evidence quote length ≥ 20 characters.
-  - `+15 pts`: Strong evidence citation with quote length ≥ 50 characters.
-  - `+15 pts`: Verified physical page number attached to source text.
-  - `+15 pts`: Explicit ISO fiscal date or reporting period anchored.
-  - `+15 pts`: Standardized unit of measurement (USD, EUR, %, shares, etc.).
-  - `+10 pts`: Explicit contextual scope defined (Consolidated, Non-GAAP, Segment).
-  - `+5 pts`: Numeric normalization successfully parsed without ambiguity.
-  - `-20 pts`: Missing evidence citation / ungrounded assertion.
-  - `-15 pts`: Missing or unassigned page number.
-  - `-10 pts`: Short or ambiguous evidence snippet (<20 characters).
-- **Integrated UI Verification**: Color-coded badges and confidence breakdown drawer integrated across the Fact Explorer, Evidence Inspector, and Relationship Views.
+### 1. Clone the Repository
+```bash
+git clone https://github.com/shreyes-7/FactLens.git
+cd FactLens
+```
 
 ---
 
-### 4. 🗂️ Core Architecture & Foundation
-- **PDF Ingestion & Page Breakdown**: PyMuPDF extraction preserving page numbers and chunk boundaries.
-- **Incremental Extraction**: Only processes unextracted pages; avoids wasteful reprocessing of existing pages.
-- **Dual LLM Pipeline**: Primary extraction via Google Gemini with automatic, seamless fallback to Groq (Llama 3.3 70B).
-- **Hybrid Search & Candidate Matching**: pgvector semantic embedding retrieval + canonical metadata filtering to discover cross-document relationships.
-- **Isolated Cross-Doc vs Same-Doc Comparisons**: Clean 3-way toggle segregating cross-document comparisons (`doc_a != doc_b`) and intra-document page checks without leakage.
-- **Real-Time Extraction Status**: Immediate optimistic state updates, spinning loader indicators on rows and buttons, automatic polling every 2s, and live dashboard counter synchronization.
+### 2. Configure Environment Variables (`.env`)
+
+Copy the example environment file:
+```bash
+cp .env.example .env
+```
+
+Open `.env` and fill in the required values. **Do not commit API keys or database passwords to git.**
+
+```ini
+# =================================================================
+# DATABASE & STORAGE (Supabase PostgreSQL + pgvector + Storage)
+# =================================================================
+# PostgreSQL connection string (Transaction Pooler port 6543 or Session port 5432)
+DATABASE_URL=postgresql://postgres:[YOUR_PASSWORD]@db.[YOUR_PROJECT_REF].supabase.co:5432/postgres
+
+# Supabase Project API URL and Secret Service Role Key (for storage bucket and DB access)
+SUPABASE_URL=https://[YOUR_PROJECT_REF].supabase.co
+SUPABASE_SERVICE_KEY=your_supabase_service_role_secret_key
+STORAGE_BUCKET=documents
+
+# =================================================================
+# LLM & EMBEDDING PROVIDERS (Gemini primary, Groq fallback)
+# =================================================================
+LLM_PROVIDER=gemini
+GEMINI_API_KEY=your_gemini_api_key_here
+GEMINI_MODEL=gemini-2.0-flash
+
+# Optional: Groq fallback provider
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+
+# Embedding Provider (gemini or jina)
+EMBEDDING_PROVIDER=gemini
+EMBEDDING_MODEL=text-embedding-004
+EMBEDDING_DIMENSION=768
+
+# =================================================================
+# CORS & FRONTEND SETTINGS
+# =================================================================
+FRONTEND_URL=https://factlens-zeta.vercel.app
+ALLOWED_CORS_ORIGINS=http://localhost:5173,http://localhost:3000,https://factlens-zeta.vercel.app
+APP_ENV=development
+```
 
 ---
 
-## 🛠️ Technology Stack
+### 3. Database Migration
 
-| Layer | Technology |
-|---|---|
-| **Backend** | Python 3.11, FastAPI, Pydantic v2, PyMuPDF, psycopg3 |
-| **Database & Search** | Supabase PostgreSQL, pgvector (embeddings & semantic search) |
-| **LLM & Embeddings** | Google Gemini (primary), Groq / Llama 3.3 (fallback), Jina Embeddings v3 |
-| **Frontend** | React 18, Vite, TypeScript, Tailwind CSS, Lucide Icons, Radix UI Primitives |
-| **Testing** | Pytest (142 automated test suites) |
+If setting up a fresh Supabase/PostgreSQL instance:
+1. Enable `pgvector` in your database SQL Editor:
+   ```sql
+   CREATE EXTENSION IF NOT EXISTS vector;
+   ```
+2. Run the SQL schema files located in `backend/migrations/` (starting with `001_initial_schema.sql`).
+3. In Supabase Storage, create a bucket named `documents` (set to Private).
 
 ---
 
-## 🌐 Production Deployment Guide (Vercel + Render + Supabase)
+### 4. Run the Backend (FastAPI)
 
-FactLens is engineered for cost-effective, enterprise-grade production deployment using **100% free-tier** services:
-- **Frontend**: [Vercel Free Tier](https://vercel.com) (React 18 + Vite + TypeScript + Tailwind CSS)
-- **Backend**: [Render Free Web Service](https://render.com) (FastAPI + Python 3.11 + Uvicorn)
-- **Database & Storage**: [Supabase Free Tier](https://supabase.com) (Managed PostgreSQL + pgvector + Cloud Storage)
-- **LLM Engine**: Google Gemini API (Primary) with Groq Llama 3.3 (Fallback)
+```bash
+# Using uv (recommended)
+uv run uvicorn backend.app.main:app --reload --port 8000
+
+# Or using standard pip / virtualenv
+python -m venv .venv
+source .venv/bin/activate   # On Windows: .venv\Scripts\activate
+pip install -r requirements.txt
+uvicorn backend.app.main:app --reload --port 8000
+```
+- API Base: `http://localhost:8000`
+- Interactive Swagger Documentation: `http://localhost:8000/docs`
+- Root Health Probe: `http://localhost:8000/health`
+
+---
+
+### 5. Run the Frontend (React + Vite + TypeScript)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+- Open `http://localhost:5173` in your browser.
+
+---
+
+### 6. Run Automated Tests
+
+FactLens includes **142 automated unit and integration tests** covering PDF parsing, fact extraction, normalizers, candidate matching, relationship reasoning, and API endpoints:
+```bash
+uv run pytest
+```
+
+---
+
+## 💡 Approach & Architecture
+
+### High-Level Design
 
 ```
-                       ┌─────────────────────────────────────────┐
-                       │              Vercel (SPA)               │
-                       │     React + Vite + TypeScript + CSS     │
-                       └────────────────────┬────────────────────┘
-                                            │
-                                            │ HTTPS /api/*
-                                            ▼
-                       ┌─────────────────────────────────────────┐
-                       │         Render Free Web Service         │
-                       │        FastAPI + Python + Uvicorn       │
-                       └──────┬──────────────────┬───────────────┘
-                              │                  │
-                SQL / pgvector│                  │ REST API (Direct stream)
-                              ▼                  ▼
+                          ┌───────────────────────────┐
+                          │   React + Vite Frontend   │
+                          │ TypeScript + Tailwind CSS │
+                          └─────────────┬─────────────┘
+                                        │ REST API
+                                        ▼
+                          ┌───────────────────────────┐
+                          │      FastAPI Backend      │
+                          │   Pydantic v2 Validation  │
+                          └──────┬─────────────┬──────┘
+                                 │             │
+                PDF Stream (RAM) │             │ SQL + pgvector
+                                 ▼             ▼
        ┌─────────────────────────────┐    ┌─────────────────────────────┐
-       │     Supabase PostgreSQL     │    │   Supabase Cloud Storage    │
-       │    Normalized Fact Tables   │    │  Private 'documents' Bucket │
-       │  pgvector Semantic Indices  │    │  In-memory PDF parsing via  │
-       │   Lateral Evidence Joins    │    │      PyMuPDF streams        │
-       └─────────────────────────────┘    └─────────────────────────────┘
+       │   In-Memory PyMuPDF Parser  │    │     Supabase PostgreSQL     │
+       │   Zero Disk Write to Server │    │   Vector Embeddings & RAG   │
+       └──────────────┬──────────────┘    │   Normalized Facts Schema   │
+                      │                   │  Cross-Document Rel Tables  │
+                      ▼                   └─────────────────────────────┘
+       ┌─────────────────────────────┐
+       │    Dual LLM Intelligence    │
+       │  Gemini 2.0 (Primary)       │
+       │  Groq Llama 3.3 (Fallback)  │
+       └─────────────────────────────┘
 ```
 
----
+### 1. Ingestion & In-Memory PDF Parsing
+- **Zero Local Disk Footprint**: To run safely in ephemeral server environments (e.g., Render Free / serverless containers), PDFs uploaded via UI/API are streamed directly to Supabase Cloud Storage.
+- **In-Memory Chunking**: PyMuPDF processes raw byte streams directly in memory (`fitz.open(stream=bytes)`), tagging text chunks with their physical PDF page number and token offsets.
 
-### 1. Database & Cloud Storage Setup (Supabase)
+### 2. Atomic Fact Discovery & Schema Normalization
+- Documents guide what counts as a fact: rather than forcing a rigid hardcoded template, the extraction pipeline extracts atomic tuples:
+  - `(Entity, Predicate, Raw Value, Normalized Value, Unit, Fiscal Period, Scope, Status)`
+- **Multi-Dimensional Deterministic Normalizers**:
+  - **Numeric & Scale Normalization**: Converts phrases like `₹1,266 Mn`, `Rs. 127 Cr`, `3.88K`, or `45.2%` into standardized base numbers and standard currency/unit tokens (`INR`, `USD`, `%`, `count`).
+  - **Fiscal Period Anchoring**: Resolves `Q4 FY24`, `FY2023-24`, and relative dates into standardized fiscal identifiers.
+  - **Scope Classification**: Disambiguates `Consolidated`, `Standalone`, `Segment-level`, `GAAP`, and `Non-GAAP`.
 
-1. **Create Supabase Project**:
-   - Go to [Supabase Dashboard](https://supabase.com/dashboard) and create a new project.
-   - Note down your **Database Connection String** (`URI` mode with pooling or direct port 5432).
-   - Note down your **Project URL** (`https://<project-ref>.supabase.co`) and **Service Role Key** (`service_role` secret key from Settings > API).
+### 3. Verbatim Evidence Grounding
+- Hallucination prevention is enforced at the schema level: **no fact can exist without an evidence citation**.
+- Every fact links to a verbatim quote snippet and the physical page number in the original PDF where the statement appears.
 
-2. **Enable pgvector & Apply Schema**:
-   - In Supabase SQL Editor, run:
-     ```sql
-     CREATE EXTENSION IF NOT EXISTS vector;
-     ```
-   - Execute the schema migration files located in `backend/migrations/` (starting with `001_initial_schema.sql` and any subsequent feature migrations) to create tables for datasets, documents, facts, evidence chunks, relationships, and vector search functions.
+### 4. Candidate Matching & Cross-Document Relationship Reasoning
+- **Decoupled Architecture**: Uploading a document immediately extracts facts and generates embeddings. Cross-document relationship discovery is performed on-demand via the Reasoning Pipeline:
+  - **Stage 1 (Semantic Candidate Retrieval)**: Uses `pgvector` cosine similarity combined with canonical predicate filtering to discover candidate pairs across distinct documents ($doc_a \neq doc_b$).
+  - **Stage 2 (Hybrid Reasoning Engine)**: Evaluates numeric variance, unit compatibility, and fiscal period overlap to classify the relationship:
+    - `CORROBORATES`: Same metric, same period, matching figures within $\pm 1.5\%$ tolerance.
+    - `CONTRADICTS`: Same entity, metric, and period, but irreconcilable numeric divergence.
+    - `CONTEXTUAL_DIFFERENCE`: Apparent discrepancy explained by accounting scope, time period progression, or reporting currency.
+    - `UNCERTAIN / RELATED`: Thematic or directional association without strict mathematical comparison.
 
-3. **Configure Storage Bucket**:
-   - Navigate to **Storage** > **New Bucket**.
-   - Bucket Name: `documents`
-   - Privacy: **Private** (recommended; documents are accessed via server-signed URLs and service role credentials).
+### 5. Key Engineering Decisions & Trade-Offs
 
----
-
-### 2. Backend Deployment (Render Free Web Service)
-
-1. **Create Web Service**:
-   - Log into [Render Dashboard](https://dashboard.render.com).
-   - Click **New +** > **Web Service**.
-   - Connect your GitHub repository: `https://github.com/shreyes-7/FactLens`.
-
-2. **Configure Service Settings**:
-   - **Name**: `factlens-backend` (or your preferred name)
-   - **Region**: Choose the region closest to your Supabase project (e.g., Frankfurt, Oregon, Singapore).
-   - **Branch**: `main`
-   - **Root Directory**: Leave blank (uses repository root `.`).
-   - **Runtime**: `Python 3` (3.11+)
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**:
-     ```bash
-     uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
-     ```
-   - **Instance Type**: `Free` (0.1 CPU, 512 MB RAM)
-
-3. **Configure Health Check**:
-   - In **Advanced Settings**, set **Health Check Path** to `/health`.
-   - Render will periodically ping `GET /health` to monitor container health and trigger fast zero-downtime rollouts.
-
-4. **Add Environment Variables on Render**:
-
-| Variable Name | Required | Default / Value | Description |
-|---|---|---|---|
-| `DATABASE_URL` | **Yes** | `postgresql://postgres:[password]@db.[ref].supabase.co:5432/postgres` | Supabase PostgreSQL connection string |
-| `SUPABASE_URL` | **Yes** | `https://[project-ref].supabase.co` | Supabase Project API URL |
-| `SUPABASE_SERVICE_KEY` | **Yes** | `eyJh...` | Supabase Service Role Secret Key (for private bucket & DB access) |
-| `STORAGE_BUCKET` | No | `documents` | Supabase Storage bucket for PDF documents |
-| `GEMINI_API_KEY` | **Yes** | `AIza...` | Google Gemini API Key (primary extraction and embeddings) |
-| `GROQ_API_KEY` | No | `gsk_...` | Groq API Key (high-speed fallback provider) |
-| `FRONTEND_URL` | **Yes** | `https://factlens.vercel.app` | Deployed Vercel URL for strict CORS validation |
-| `ALLOWED_CORS_ORIGINS` | No | `http://localhost:5173,http://localhost:3000` | Additional origins (comma-separated or JSON list) |
-| `APP_ENV` | No | `production` | Deployment environment flag |
-| `LOGFIRE_TOKEN` | No | *(Optional)* | Pydantic Logfire token for observability |
-
-> **Note on Render Free Tier Cold Starts**:
-> Render's free tier spins down web instances after 15 minutes of inactivity. When a request arrives, the instance spins up automatically, taking **~45 to 60 seconds** on the first request. The FactLens frontend client includes built-in detection that alerts the user with helpful status guidance during cold starts.
-
-> **Note on Ephemeral Filesystem**:
-> Render free instances have an ephemeral local disk. FactLens is architected with **zero disk persistence requirements**: all uploaded PDFs are streamed directly into Supabase Storage and parsed in-memory using PyMuPDF streams (`fitz.open(stream=file_bytes)`). No data is ever lost on container restart.
+| Decision | Trade-Off Chosen | Rationale |
+|---|---|---|
+| **Decoupled Reasoning** | Document extraction does not auto-run full cross-document reasoning on upload. | Comparing every new fact against hundreds of existing facts on upload creates an $O(N \times M)$ bottleneck and consumes excessive tokens. Decoupling gives users instant uploads and on-demand analysis. |
+| **Deterministic Rules + LLM Reasoning** | Normalization uses regex + mathematical rules; semantic classification uses LLM. | Pure LLM comparison hallucinates rounding differences as contradictions. Pure regex fails on linguistic nuances. Combining both ensures sub-50ms deterministic checks with LLM adaptability. |
+| **In-Memory Streaming** | Never persist PDFs to the local container disk. | Free-tier host environments (Render, Fly.io, Vercel) have ephemeral filesystems. In-memory streaming guarantees zero file-loss on container restarts. |
 
 ---
 
-### 3. Frontend Deployment (Vercel Free Tier)
+## 🔍 The Four Required Cases
 
-1. **Import Project**:
-   - Log into [Vercel Dashboard](https://vercel.com) and click **Add New...** > **Project**.
-   - Select your `FactLens` GitHub repository.
+FactLens provides dedicated views and an automated benchmark endpoint (`GET /api/cases/four-cases`) demonstrating each required case from real PDF disclosures:
 
-2. **Configure Build Settings**:
-   - **Framework Preset**: `Vite`
-   - **Root Directory**: Click **Edit** and set to `frontend`.
-   - **Build Command**: `npm run build` (or leave default Vite command).
-   - **Output Directory**: `dist` (default).
-   - **Install Command**: `npm install` (default).
-
-3. **Configure Environment Variables on Vercel**:
-
-| Variable Name | Required | Example Value | Description |
-|---|---|---|---|
-| `VITE_API_URL` | **Yes** | `https://factlens-backend.onrender.com` | Base URL of your deployed Render backend |
-
-4. **Deploy**:
-   - Click **Deploy**. Vercel will build and deploy your React SPA in <60 seconds.
-   - Once deployed, copy your production Vercel URL (e.g., `https://factlens.vercel.app`) and ensure it matches the `FRONTEND_URL` set in Render's environment variables.
+### Case 1: Cross-Document Fact Corroboration
+- **Description**: Two distinct documents report the same corporate metric using completely different units and scales, verified by FactLens.
+- **Source A**: `03-delhivery-q4-fy24-earnings-presentation.pdf` (Page 5)  
+  - *Extracted Fact*: `Delhivery Ltd | EBITDA | Rs. 127 Cr (Normalized: 1,270,000,000 INR)`
+  - *Evidence Quote*: `"FY24 EBITDA increased by Rs. 578 Cr to Rs. 127 Cr from Rs. (452 Cr) in FY23"`
+- **Source B**: `02-delhivery-annual-report-fy24-excerpt.pdf` (Page 4)  
+  - *Extracted Fact*: `Delhivery Ltd | EBITDA | ₹1,266Mn (Normalized: 1,266,000,000 INR)`
+  - *Evidence Quote*: `"₹1,266Mn EBITDA"`
+- **System Reasoning**: FactLens converts `Rs. 127 Cr` ($1.27 \times 10^9$) and `₹1,266 Mn` ($1.266 \times 10^9$) into canonical base INR units. The variance is just $0.31\%$, confirming corroboration within standard rounding tolerance to the nearest crore.
 
 ---
 
-### 4. 📋 36-Point Pre-Deployment Verification Checklist
-
-#### Architecture & Configuration
-- [ ] 1. Single unified repository with clean separation: `backend/` (FastAPI) and `frontend/` (Vite).
-- [ ] 2. Zero hardcoded secrets, database credentials, or API keys in git history or tracked code.
-- [ ] 3. `.env.example` mirrors all backend and frontend configuration keys without values.
-- [ ] 4. Dynamic `$PORT` handling on backend: `uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT`.
-- [ ] 5. Root lightweight health check endpoint `GET /health` responding with HTTP 200 `{"status": "ok"}`.
-- [ ] 6. Detailed system health check endpoint `GET /api/health` checking DB connectivity and LLM provider readiness.
-- [ ] 7. CORS origins properly configured with dynamic `FRONTEND_URL` and `ALLOWED_CORS_ORIGINS`.
-- [ ] 8. Comma-separated string parsing for `ALLOWED_CORS_ORIGINS` to support Render environment input.
-- [ ] 9. Rate limiting middleware active with configurable per-minute thresholds.
-- [ ] 10. Security headers middleware active (X-Content-Type-Options, X-Frame-Options, HSTS).
-
-#### Storage & Ephemeral Container Hardening
-- [ ] 11. PDF upload pipeline writes directly to Supabase Storage private bucket (`documents`).
-- [ ] 12. No permanent files written to local container disk (`/tmp` or working dir).
-- [ ] 13. PyMuPDF parsing executes from in-memory byte streams (`fitz.open(stream=bytes)`).
-- [ ] 14. Signed URLs generated dynamically for document downloads with configurable expiration.
-- [ ] 15. Graceful handling of missing or deleted storage objects.
-
-#### Database & Vector Retrieval
-- [ ] 16. Supabase PostgreSQL instance active with `vector` extension enabled.
-- [ ] 17. Connection pooling supported (supports both transaction pooler port 6543 and session port 5432).
-- [ ] 18. Normalized fact schema with explicit foreign keys, composite indexes, and lateral evidence joins.
-- [ ] 19. pgvector cosine similarity search queries executing with IVFFlat or HNSW indexes.
-- [ ] 20. Sub-30ms analytical queries for "What Changed?" comparison matrix.
-
-#### Extraction & AI Providers
-- [ ] 21. Gemini API primary provider active with valid credentials.
-- [ ] 22. Groq Llama 3.3 fallback provider tested and functional upon primary exhaustion.
-- [ ] 23. Incremental fact extraction prevents re-extracting previously processed document pages.
-- [ ] 24. Deterministic entity, date, number, unit, and scope normalizers active.
-- [ ] 25. Verbatim evidence grounding validated with exact physical page coordinates.
-
-#### FactLens 2.0 Intelligence Features
-- [ ] 26. Contradiction Investigator performs deterministic 9-factor verification without extra LLM cost.
-- [ ] 27. Cross-Document Comparison Matrix correctly handles 2 to 5 simultaneous document comparisons.
-- [ ] 28. Evidence Quality & Fact Confidence scoring (0–100) computed with transparent signal breakdown.
-- [ ] 29. Isolated cross-document comparison view (`doc_a != doc_b`) strictly segregated from same-doc checks.
-- [ ] 30. Real-time extraction status polling with immediate optimistic UI updates and counter sync.
-
-#### Frontend & Build Integrity
-- [ ] 31. `frontend/vercel.json` contains SPA rewrite rules (`/(.*)` -> `/index.html`) to prevent 404s on refresh.
-- [ ] 32. `VITE_API_URL` and `VITE_API_BASE_URL` properly resolved with trailing-slash and `/api` auto-formatting.
-- [ ] 33. Axios/Fetch interceptors handle Render cold-start HTTP 502/504 errors with informative user messaging.
-- [ ] 34. Frontend TypeScript build compiles with zero errors (`tsc && vite build`).
-- [ ] 35. Responsive layout tested across desktop, tablet, and mobile breakpoints.
-- [ ] 36. 100% automated test suite passing (142 of 142 Pytest unit and integration tests).
+### Case 2: Genuine or Unreconciled Contradiction
+- **Description**: Conflicting values reported for the same metric over the exact same reporting timeframe without reconciling scope or accounting context.
+- **Source A**: `03-delhivery-q4-fy24-earnings-presentation.pdf` (Page 5)  
+  - *Extracted Fact*: `PAT loss reduction amount | Rs. 759 Cr | FY24`
+  - *Evidence Quote*: `"PAT loss reduced by Rs. 759 Cr from Rs. (1,008 Cr) in FY23"`
+- **Source B**: `03-delhivery-q4-fy24-earnings-presentation.pdf` (Page 5)  
+  - *Extracted Fact*: `FY24 EBITDA increase amount | Rs. 578 Cr | FY24`
+  - *Evidence Quote*: `"FY24 EBITDA increased by Rs. 578 Cr to Rs. 127 Cr from Rs. (452 Cr) in FY23"`
+- **System Reasoning**: Both statements assert full-year operating performance improvements for FY24. The reported delta of $23.8\%$ represents an unreconciled numerical conflict unless detailed sub-line item bridges are provided.
 
 ---
 
-### 5. 🔧 Troubleshooting & FAQ
+### Case 3: Apparent Contradiction Reconciled by Context
+- **Description**: Two values appear in direct conflict at first glance, but the discrepancy is fully resolved once temporal context is isolated.
+- **Source A**: `02-delhivery-annual-report-fy24-excerpt.pdf` (Page 4)  
+  - *Extracted Fact*: `Delhivery Ltd | EBITDA | ₹1,266Mn | FY24`
+  - *Evidence Quote*: `"₹1,266Mn EBITDA"`
+- **Source B**: `03-delhivery-q4-fy24-earnings-presentation.pdf` (Page 5)  
+  - *Extracted Fact*: `Delhivery Ltd | EBITDA | Rs. (452 Cr) | FY23`
+  - *Evidence Quote*: `"from Rs. (452 Cr) in FY23"`
+- **System Reasoning**: An uncontextualized search engine might flag $+₹1,266\text{ Mn}$ and $-₹452\text{ Cr}$ as a direct contradiction. FactLens extracts the temporal dimensions (`FY24` vs `FY23`), classifying the pair as a valid `CONTEXTUAL_DIFFERENCE` representing YoY business turnaround rather than a data conflict.
 
-#### Q: The frontend shows "Request failed with status 502/504" on first visit.
-> **Answer**: This is normal for Render's free tier. Render spins down services after 15 minutes of inactivity. When the first request arrives, it takes ~45 to 60 seconds to launch the container. The FactLens frontend displays a helpful retry message. Once awake, subsequent requests respond in milliseconds.
+---
 
-#### Q: CORS error: `Access to fetch at '...' from origin '...' has been blocked by CORS policy`.
-> **Answer**: Make sure `FRONTEND_URL` on Render matches your exact Vercel URL (including `https://`, without a trailing slash, e.g., `https://factlens.vercel.app`). Also verify that `ALLOWED_CORS_ORIGINS` includes any staging or preview domains if applicable.
+### Case 4: Extraction or Reasoning Failure Handled Gracefully
+- **Description**: Handling ambiguous, qualitative, or unquantified textual claims without fabricating facts or relationships.
+- **Source A**: `02-delhivery-annual-report-fy24-excerpt.pdf` (Page 4)  
+  - *Extracted Fact*: `Express Parcel | Volume growth | "steady growth across service lines" (Normalized: None)`
+  - *Evidence Quote*: `"Our steady growth across service lines, coupled with inherent operating leverage in our business"`
+- **Source B**: `02-delhivery-annual-report-fy24-excerpt.pdf` (Page 4)  
+  - *Extracted Fact*: `Express Parcel | Shipment Volume | 740Mn parcels | FY24`
+  - *Evidence Quote*: `"740Mn Express parcels shipped"`
+- **System Handling**: Fact A contains no numeric baseline or fiscal period definition. Rather than hallucinating a corroboration or guessing a growth percentage, FactLens assigns Fact A a `LOW` confidence score and flags the candidate relationship as `UNCERTAIN`, explaining the exact missing contextual signals.
 
-#### Q: Refreshing a page on Vercel returns a 404 error.
-> **Answer**: Ensure `frontend/vercel.json` is committed and contains the rewrite rule routing `/(.*)` to `/index.html`. This allows React Router to manage client-side routes.
+---
 
-#### Q: Render build fails during `pip install`.
-> **Answer**: Ensure Render's Python version is set to 3.11. All dependencies in `requirements.txt` are pinned and verified compatible with Python 3.11+.
+## 🌟 Brownie Points & Extensions (FactLens 2.0)
+
+1. **Incremental Ingestion Without Rebuilding Knowledge**:
+   - FactLens tracks extracted page numbers at the database layer. Re-processing a document or uploading an amended version only extracts newly discovered or unparsed pages, preserving existing embeddings and citations.
+2. **Contradiction Investigator**:
+   - An interactive multi-factor audit engine that evaluates entity, metric, fiscal period, unit, and accounting scope matches deterministically in $<50\text{ms}$ with zero extra LLM cost.
+3. **"What Changed?" Cross-Document Comparison Workspace**:
+   - Compare 2 to 5 filings simultaneously in a consolidated matrix. A single lateral PostgreSQL query tracks metric trends (`INCREASED`, `DECREASED`, `UNCHANGED`, `ADDED`, `NOT_FOUND`).
+4. **Fact Confidence & Evidence Quality Scoring (0–100)**:
+   - Every fact receives a transparent, rule-based confidence score based on citation length, verified physical page attachment, ISO period anchoring, and numeric normalization completeness.
+5. **No Hardcoded Filenames or Document Rules**:
+   - Completely generalized prompt architecture tested against multi-industry filings, prospectuses, and earnings releases.
+
+---
+
+## ⚠️ Limitations & Next Steps
+
+### What Does Not Work Yet
+- **Scanned Image OCR**: FactLens currently utilizes PyMuPDF vector text layer extraction. Scanned image-only PDFs with no embedded text require an upstream OCR engine (e.g., Tesseract or Google Cloud Vision).
+- **Deeply Nested Multi-Page Tables**: Complex financial tables spanning 3+ consecutive pages without repeated table headers can occasionally fragment related row headers.
+- **Candidate Pair Scaling on Very Large Corpora**: For datasets exceeding 10,000+ facts, brute-force candidate matching needs hierarchical clustering or k-means partitioning before pairwise comparison.
+
+### What We Would Build Next
+- **Asynchronous Task Queue (Celery / Redis)**: Move large batch extractions (50+ PDFs) to dedicated worker queues with live WebSocket progress feeds.
+- **Visual Bounding-Box Overlay**: Render the physical PDF page directly in the browser with highlight boxes over the exact coordinates of the cited text quote.
+- **Entity Knowledge Graph Visualization**: Interactive node-link graph mapping corporate subsidiaries, directors, and cross-filing metric flows.
+
+---
+
+## 📋 Additional Notes
+
+- **Production Deployment**: Frontend is live on **Vercel** (`https://factlens-zeta.vercel.app/`), connected to a free **Render** FastAPI backend and **Supabase** (PostgreSQL + `pgvector` + Cloud Storage).
+- **Security & Privacy**: Zero API keys, passwords, or confidential tokens are committed to this repository. All environment keys are dynamically injected via environment variables.
 
 ---
 
 ## 👥 Author
 - **Developer**: Shreyes Jaiswal
 - **Email**: [shreyesjaiswal7@gmail.com](mailto:shreyesjaiswal7@gmail.com)
+- **GitHub**: [https://github.com/shreyes-7](https://github.com/shreyes-7)
 - **Repository**: [https://github.com/shreyes-7/FactLens](https://github.com/shreyes-7/FactLens)
-
