@@ -61,6 +61,10 @@ export function OverviewView({
 
   useEffect(() => {
     fetchOverviewData();
+    const interval = setInterval(() => {
+      fetchOverviewData();
+    }, 8000);
+    return () => clearInterval(interval);
   }, [selectedDatasetId, refreshTrigger]);
 
   const handleManualRefresh = () => {

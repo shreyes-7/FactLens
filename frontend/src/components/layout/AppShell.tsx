@@ -46,7 +46,13 @@ export function AppShell() {
 
   useEffect(() => {
     fetchDatasets();
-  }, [refreshTrigger]);
+    // Poll every 4 seconds when a task is running, or every 10 seconds generally
+    const pollInterval = activeTask && activeTask.status === "running" ? 3000 : 10000;
+    const timer = setInterval(() => {
+      fetchDatasets();
+    }, pollInterval);
+    return () => clearInterval(timer);
+  }, [refreshTrigger, activeTask]);
 
   const handleTriggerRefreshAll = () => {
     setRefreshTrigger((prev) => prev + 1);

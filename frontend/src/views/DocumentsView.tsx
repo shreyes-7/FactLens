@@ -54,6 +54,34 @@ export function DocumentsView({
     fetchDocs();
   }, [datasetId, refreshTrigger]);
 
+  // Active status polling while any document is in processing or pending status
+  useEffect(() => {
+    const hasActiveProcessing = documents.some((d) => {
+      const s = (d.status || "").toLowerCase();
+      return s === "processing" || s === "pending" || s === "queued";
+    });
+
+    const pollInterval = hasActiveProcessing ? 2500 : 8000;
+
+    const timer = setInterval(() => {
+      api.getDocuments(datasetId)
+        .then((latestDocs) => {
+          setDocuments(latestDocs);
+          const stillProcessing = latestDocs.some((d) => {
+            const s = (d.status || "").toLowerCase();
+            return s === "processing" || s === "pending" || s === "queued";
+          });
+          // When all documents finish processing, refresh counts across app
+          if (hasActiveProcessing && !stillProcessing && onRefreshCounts) {
+            onRefreshCounts();
+          }
+        })
+        .catch((err) => console.warn("Poll documents error:", err));
+    }, pollInterval);
+
+    return () => clearInterval(timer);
+  }, [documents, datasetId, onRefreshCounts]);
+
   const filteredDocs = documents.filter((doc) =>
     doc.filename.toLowerCase().includes(searchTerm.toLowerCase())
   );

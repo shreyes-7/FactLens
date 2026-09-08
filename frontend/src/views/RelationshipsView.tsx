@@ -11,12 +11,14 @@ import {
   Scale,
   FileCheck2,
   X,
+  Loader2,
 } from "lucide-react";
 import { api } from "@/api/client";
-import { RelationshipWithDetailsResponse, RelationshipType } from "@/api/types";
+import { RelationshipWithDetailsResponse, FactWithEvidenceResponse } from "@/api/types";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComparisonCard } from "@/components/relationships/ComparisonCard";
+import { EvidenceInspector } from "@/components/facts/EvidenceInspector";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -26,8 +28,8 @@ interface RelationshipsViewProps {
   refreshTrigger?: number;
 }
 
-export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: RelationshipsViewProps) {
-  const [relationships, setRelationships] = useState<RelationshipWithDetailsResponse[]>([]);
+export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsViewProps) {
+  const [allRelationships, setAllRelationships] = useState<RelationshipWithDetailsResponse[]>([]);
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("ALL");
   const [minConfidence, setMinConfidence] = useState<number>(0.0);
@@ -35,23 +37,26 @@ export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: 
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isReasoning, setIsReasoning] = useState(false);
 
+  // In-place Fact Evidence Inspector State (no redirect to other views)
+  const [inspectFact, setInspectFact] = useState<FactWithEvidenceResponse | null>(null);
+  const [loadingFactId, setLoadingFactId] = useState<string | null>(null);
+
   const fetchRelationships = () => {
     setLoading(true);
+    // Fetch ALL relationships for the dataset so category counts are accurate across all tabs
     api.getRelationships({
       datasetId,
-      type: filterType !== "ALL" ? (filterType as RelationshipType) : undefined,
-      minConfidence: minConfidence > 0 ? minConfidence : undefined,
       crossDocumentOnly: crossDocOnly,
       excludeSamePage: true,
     })
-      .then((res) => setRelationships(res.relationships || []))
+      .then((res) => setAllRelationships(res.relationships || []))
       .catch((err) => console.error("Failed to load relationships:", err))
       .finally(() => setLoading(false));
   };
 
   useEffect(() => {
     fetchRelationships();
-  }, [datasetId, filterType, minConfidence, crossDocOnly, refreshTrigger]);
+  }, [datasetId, crossDocOnly, refreshTrigger]);
 
   const handleRunReasoning = async () => {
     if (!datasetId) return;
@@ -66,45 +71,72 @@ export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: 
     }
   };
 
-  // Client-side search filtering by metric, predicate, document name, or claim text
-  const filteredRelationships = useMemo(() => {
-    if (!searchQuery.trim()) return relationships;
-    const q = searchQuery.toLowerCase().trim();
-    return relationships.filter((rel) => {
-      const matchDocA = rel.fact_a.document_filename?.toLowerCase().includes(q);
-      const matchDocB = rel.fact_b.document_filename?.toLowerCase().includes(q);
-      const matchPredA = rel.fact_a.predicate?.toLowerCase().includes(q);
-      const matchPredB = rel.fact_b.predicate?.toLowerCase().includes(q);
-      const matchClaimA = rel.fact_a.raw_value?.toLowerCase().includes(q);
-      const matchClaimB = rel.fact_b.raw_value?.toLowerCase().includes(q);
-      const matchEntityA = rel.fact_a.entity?.toLowerCase().includes(q);
-      const matchEntityB = rel.fact_b.entity?.toLowerCase().includes(q);
-      const matchRationale = rel.rationale?.toLowerCase().includes(q);
+  // In-place inspection: Open sidebar drawer directly on this page
+  const handleInspectFactInDrawer = async (factId: string) => {
+    setLoadingFactId(factId);
+    try {
+      const fact = await api.getFactDetail(factId);
+      setInspectFact(fact);
+    } catch (err) {
+      console.error("Failed to fetch fact details:", err);
+    } finally {
+      setLoadingFactId(null);
+    }
+  };
 
-      return (
-        matchDocA ||
-        matchDocB ||
-        matchPredA ||
-        matchPredB ||
-        matchClaimA ||
-        matchClaimB ||
-        matchEntityA ||
-        matchEntityB ||
-        matchRationale
-      );
-    });
-  }, [relationships, searchQuery]);
-
-  // Overall relationship stats
+  // Calculate true counts across ALL relationships for tab badges
   const stats = useMemo(() => {
     return {
-      total: relationships.length,
-      corroborates: relationships.filter((r) => r.relationship_type === "CORROBORATES").length,
-      contradicts: relationships.filter((r) => r.relationship_type === "CONTRADICTS").length,
-      contextual: relationships.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length,
-      related: relationships.filter((r) => r.relationship_type === "RELATED").length,
+      total: allRelationships.length,
+      corroborates: allRelationships.filter((r) => r.relationship_type === "CORROBORATES").length,
+      contradicts: allRelationships.filter((r) => r.relationship_type === "CONTRADICTS").length,
+      contextual: allRelationships.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length,
+      related: allRelationships.filter((r) => r.relationship_type === "RELATED").length,
     };
-  }, [relationships]);
+  }, [allRelationships]);
+
+  // Client-side filtering by relationship_type, confidence, and search query
+  const filteredRelationships = useMemo(() => {
+    return allRelationships.filter((rel) => {
+      // 1. Filter by relationship type
+      if (filterType !== "ALL" && rel.relationship_type !== filterType) {
+        return false;
+      }
+
+      // 2. Filter by minimum confidence
+      if (minConfidence > 0 && rel.confidence < minConfidence) {
+        return false;
+      }
+
+      // 3. Filter by search query
+      if (searchQuery.trim()) {
+        const q = searchQuery.toLowerCase().trim();
+        const matchDocA = rel.fact_a.document_filename?.toLowerCase().includes(q);
+        const matchDocB = rel.fact_b.document_filename?.toLowerCase().includes(q);
+        const matchPredA = rel.fact_a.predicate?.toLowerCase().includes(q);
+        const matchPredB = rel.fact_b.predicate?.toLowerCase().includes(q);
+        const matchClaimA = rel.fact_a.raw_value?.toLowerCase().includes(q);
+        const matchClaimB = rel.fact_b.raw_value?.toLowerCase().includes(q);
+        const matchEntityA = rel.fact_a.entity?.toLowerCase().includes(q);
+        const matchEntityB = rel.fact_b.entity?.toLowerCase().includes(q);
+        const matchRationale = rel.rationale?.toLowerCase().includes(q);
+
+        return (
+          matchDocA ||
+          matchDocB ||
+          matchPredA ||
+          matchPredB ||
+          matchClaimA ||
+          matchClaimB ||
+          matchEntityA ||
+          matchEntityB ||
+          matchRationale
+        );
+      }
+
+      return true;
+    });
+  }, [allRelationships, filterType, minConfidence, searchQuery]);
 
   const filterOptions = [
     { id: "ALL", label: "All Comparisons", icon: FileCheck2, count: stats.total, color: "text-foreground" },
@@ -317,7 +349,7 @@ export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: 
             <ComparisonCard
               key={rel.id}
               relationship={rel}
-              onInspectFact={onInspectFact}
+              onInspectFact={handleInspectFactInDrawer}
             />
           ))
         ) : (
@@ -331,6 +363,20 @@ export function RelationshipsView({ datasetId, onInspectFact, refreshTrigger }: 
           />
         )}
       </div>
+
+      {/* In-Place Slide-Over Evidence Inspector Drawer */}
+      <EvidenceInspector
+        fact={inspectFact}
+        onClose={() => setInspectFact(null)}
+      />
+
+      {/* Background loading spinner for fact inspector */}
+      {loadingFactId && (
+        <div className="fixed bottom-6 right-6 z-50 flex items-center gap-2 bg-card border border-border px-3 py-2 rounded-lg shadow-lg text-xs font-medium">
+          <Loader2 className="h-4 w-4 animate-spin text-primary" />
+          <span>Loading source grounding...</span>
+        </div>
+      )}
     </div>
   );
 }
