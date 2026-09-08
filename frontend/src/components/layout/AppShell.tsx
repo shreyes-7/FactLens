@@ -65,10 +65,12 @@ export function AppShell() {
     documentId,
     filename,
     maxPages,
+    force = false,
   }: {
     documentId: string;
     filename: string;
     maxPages: number;
+    force?: boolean;
   }) => {
     setActiveTask({
       id: documentId,
@@ -87,7 +89,8 @@ export function AppShell() {
           chunk_size: 800,
           chunk_overlap: 100,
         },
-        false
+        false,
+        force
       );
 
       // Trigger automatic refresh of all views
@@ -112,6 +115,8 @@ export function AppShell() {
       }, 6000);
     } catch (err: any) {
       console.error("Fact extraction failed:", err);
+      setRefreshTrigger((prev) => prev + 1);
+      fetchDatasets();
       setActiveTask({
         id: documentId,
         type: "extraction",

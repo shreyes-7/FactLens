@@ -6,7 +6,7 @@ import logging
 from uuid import UUID
 from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Query, UploadFile, status
 from backend.app.config import Settings, get_settings
-from backend.app.database import get_all_documents, get_document_detail
+from backend.app.database import get_all_documents, get_document_detail, reset_document_processing_status
 from backend.app.schemas.api import (
     DocumentDetailResponse,
     DocumentResponse,
@@ -109,6 +109,7 @@ async def _run_processing_task(
     chunk_size: int,
     chunk_overlap: int,
     settings: Settings,
+    force: bool = False,
 ):
     """Background task runner for document processing."""
     try:
@@ -119,9 +120,31 @@ async def _run_processing_task(
             page_offset=page_offset,
             chunk_size=chunk_size,
             chunk_overlap=chunk_overlap,
+            force=force,
         )
     except Exception as e:
         logger.error(f"Background processing task failed for document {doc_id}: {e}", exc_info=True)
+
+
+@router.post("/{document_id}/reset-processing")
+def reset_document_processing(
+    document_id: UUID,
+    settings: Settings = Depends(get_settings),
+) -> dict:
+    """
+    Manually clear any active or stuck PROCESSING runs for this document,
+    marking them as FAILED so the document can be immediately re-processed.
+    """
+    doc = get_document_detail(str(document_id), settings)
+    if not doc:
+        raise HTTPException(status_code=404, detail=f"Document '{document_id}' not found.")
+
+    was_reset = reset_document_processing_status(str(document_id), settings)
+    return {
+        "document_id": str(document_id),
+        "reset": was_reset,
+        "message": "Processing run status has been reset." if was_reset else "No active processing run found.",
+    }
 
 
 @router.post("/{document_id}/process", response_model=ProcessingResponse)
@@ -129,6 +152,7 @@ async def process_document(
     document_id: UUID,
     payload: ProcessingRequest = ProcessingRequest(),
     background: bool = Query(False, description="Whether to execute as a background task"),
+    force: bool = Query(False, description="Whether to force execution and clear any stuck active runs"),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     settings: Settings = Depends(get_settings),
 ) -> ProcessingResponse:
@@ -149,6 +173,7 @@ async def process_document(
             chunk_size=payload.chunk_size,
             chunk_overlap=payload.chunk_overlap,
             settings=settings,
+            force=force,
         )
         return ProcessingResponse(
             document_id=document_id,
@@ -167,6 +192,7 @@ async def process_document(
             page_offset=payload.page_offset,
             chunk_size=payload.chunk_size,
             chunk_overlap=payload.chunk_overlap,
+            force=force,
         )
         return ProcessingResponse(
             document_id=document_id,

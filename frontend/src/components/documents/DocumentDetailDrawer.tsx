@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Clock } from "lucide-react";
+import { FileText, Clock, RotateCcw, Loader2, AlertTriangle } from "lucide-react";
 import { api } from "@/api/client";
 import { DocumentDetailResponse, ProcessingRunItem } from "@/api/types";
 import { Sheet } from "@/components/ui/dialog";
@@ -20,18 +20,37 @@ export function DocumentDetailDrawer({
 }: DocumentDetailDrawerProps) {
   const [doc, setDoc] = useState<DocumentDetailResponse | null>(null);
   const [loading, setLoading] = useState(false);
+  const [isResetting, setIsResetting] = useState(false);
+
+  const fetchDetail = () => {
+    if (!documentId) return;
+    setLoading(true);
+    api.getDocumentDetail(documentId)
+      .then(setDoc)
+      .catch((err) => console.error("Error loading document detail:", err))
+      .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     if (!documentId) {
       setDoc(null);
       return;
     }
-    setLoading(true);
-    api.getDocumentDetail(documentId)
-      .then(setDoc)
-      .catch((err) => console.error("Error loading document detail:", err))
-      .finally(() => setLoading(false));
+    fetchDetail();
   }, [documentId]);
+
+  const handleResetProcessing = async () => {
+    if (!documentId) return;
+    setIsResetting(true);
+    try {
+      await api.resetDocumentProcessing(documentId);
+      fetchDetail();
+    } catch (err) {
+      console.error("Failed to reset document processing:", err);
+    } finally {
+      setIsResetting(false);
+    }
+  };
 
   return (
     <Sheet
@@ -81,6 +100,33 @@ export function DocumentDetailDrawer({
                 <p className="text-base font-bold text-emerald-500 font-mono">{doc.total_facts_extracted}</p>
               </div>
             </div>
+
+            {/* Stuck Processing Alert & Reset Action */}
+            {(doc.status || "").toLowerCase() === "processing" && (
+              <div className="p-3 rounded-lg border border-amber-500/30 bg-amber-500/10 flex items-center justify-between gap-3 text-xs">
+                <div className="flex items-start gap-2 min-w-0">
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-semibold text-amber-500">Run In Progress or Stuck</p>
+                    <p className="text-[11px] text-muted-foreground">
+                      If extraction was interrupted or timed out on Render, reset status to re-extract.
+                    </p>
+                  </div>
+                </div>
+                <button
+                  disabled={isResetting}
+                  onClick={handleResetProcessing}
+                  className="px-2.5 py-1.5 rounded bg-amber-500/20 hover:bg-amber-500/30 text-amber-600 dark:text-amber-300 font-semibold text-[11px] flex items-center gap-1 shrink-0 transition-colors"
+                >
+                  {isResetting ? (
+                    <Loader2 className="h-3 w-3 animate-spin" />
+                  ) : (
+                    <RotateCcw className="h-3 w-3" />
+                  )}
+                  Reset Status
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Storage & Technical metadata */}

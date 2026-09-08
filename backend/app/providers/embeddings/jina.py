@@ -67,9 +67,16 @@ class JinaEmbeddingProvider(EmbeddingProvider):
         max_retries = 3
         backoff = 2.0
 
+        httpx_timeout = httpx.Timeout(
+            connect=10.0,
+            read=self._timeout,
+            write=30.0,
+            pool=10.0,
+        )
+
         for attempt in range(1, max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=httpx_timeout) as client:
                     response = await client.post(self.API_URL, headers=headers, json=payload)
                     if response.status_code == 429:
                         logger.warning(

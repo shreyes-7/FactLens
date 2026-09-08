@@ -114,12 +114,20 @@ export const api = {
   processDocument: (
     id: string,
     options: ProcessingRequest = {},
-    background = false
+    background = false,
+    force = false
   ): Promise<ProcessingResponse> =>
-    request<ProcessingResponse>(`/documents/${id}/process?background=${background}`, {
+    request<ProcessingResponse>(`/documents/${id}/process?background=${background}&force=${force}`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(options),
+    }),
+
+  resetDocumentProcessing: (
+    id: string
+  ): Promise<{ document_id: string; reset: boolean; message: string }> =>
+    request<{ document_id: string; reset: boolean; message: string }>(`/documents/${id}/reset-processing`, {
+      method: "POST",
     }),
 
   // 4. Facts

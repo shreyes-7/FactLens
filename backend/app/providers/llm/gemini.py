@@ -18,7 +18,7 @@ class GeminiProvider(LLMProvider):
         self,
         api_key: str,
         model: str = "gemini-flash-latest",
-        timeout: float = 60.0,
+        timeout: float = 45.0,
         max_retries: int = 3,
         base_backoff: float = 2.0,
     ) -> None:
@@ -64,9 +64,16 @@ class GeminiProvider(LLMProvider):
             "x-goog-api-key": self._api_key,
         }
 
+        httpx_timeout = httpx.Timeout(
+            connect=10.0,
+            read=self._timeout,
+            write=20.0,
+            pool=10.0,
+        )
+
         for attempt in range(self._max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=httpx_timeout) as client:
                     response = await client.post(url, headers=headers, json=payload)
 
                     if response.status_code == 429:
@@ -178,6 +185,14 @@ class GeminiProvider(LLMProvider):
 
                     return text.strip()
 
+            except httpx.TimeoutException as exc:
+                logger.warning(
+                    f"Gemini API request timed out after {self._timeout}s ({exc.__class__.__name__}). "
+                    "Failing fast to secondary provider without retrying."
+                )
+                raise RuntimeError(
+                    f"Gemini API request timed out after {self._timeout}s: {exc.__class__.__name__}"
+                ) from None
             except httpx.RequestError as exc:
                 if attempt < self._max_retries:
                     backoff = self._base_backoff * (2 ** attempt) + random.uniform(0.2, 1.0)

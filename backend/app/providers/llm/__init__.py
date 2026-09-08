@@ -23,6 +23,7 @@ def get_llm_provider(settings: Settings | None = None) -> LLMProvider:
         gemini_instance = GeminiProvider(
             api_key=cfg.llm_api_key,
             model=cfg.llm_model or "gemini-flash-latest",
+            timeout=cfg.llm_timeout,
         )
 
     groq_instance = None
@@ -30,6 +31,7 @@ def get_llm_provider(settings: Settings | None = None) -> LLMProvider:
         groq_instance = GroqProvider(
             api_key=cfg.groq_api_key,
             model=cfg.groq_model or "openai/gpt-oss-120b",
+            timeout=cfg.llm_timeout,
         )
 
     if cfg.llm_provider == "gemini":

@@ -108,6 +108,27 @@ async def test_document_detail_not_found(client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_reset_processing_not_found(client: httpx.AsyncClient):
+    """Verify POST /api/documents/{invalid_id}/reset-processing returns 404 when document doesn't exist."""
+    response = await client.post("/api/documents/00000000-0000-0000-0000-000000000000/reset-processing")
+    assert response.status_code == 404
+    assert "not found" in response.json()["detail"].lower()
+
+
+@pytest.mark.asyncio
+async def test_reset_processing_success(client: httpx.AsyncClient):
+    """Verify POST /api/documents/{id}/reset-processing resets stuck runs successfully."""
+    from unittest.mock import patch
+    with patch("backend.app.api.documents.get_document_detail", return_value={"id": "11111111-1111-1111-1111-111111111111"}):
+        with patch("backend.app.api.documents.reset_document_processing_status", return_value=True):
+            response = await client.post("/api/documents/11111111-1111-1111-1111-111111111111/reset-processing")
+            assert response.status_code == 200
+            data = response.json()
+            assert data["reset"] is True
+            assert "reset" in data["message"].lower()
+
+
+@pytest.mark.asyncio
 async def test_upload_document_rejects_non_pdf(client: httpx.AsyncClient):
     """Verify POST /api/documents/upload rejects non-PDF files with 400."""
     files = {"file": ("report.txt", b"plain text content", "text/plain")}

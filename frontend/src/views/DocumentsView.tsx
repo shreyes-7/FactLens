@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Upload, Play, Info, Search, RefreshCw, Loader2 } from "lucide-react";
+import { FileText, Upload, Play, Info, Search, RefreshCw, Loader2, RotateCcw } from "lucide-react";
 import { api } from "@/api/client";
 import { DocumentResponse } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,7 @@ interface DocumentsViewProps {
     documentId: string;
     filename: string;
     maxPages: number;
+    force?: boolean;
   }) => void;
 }
 
@@ -43,7 +44,9 @@ export function DocumentsView({
     id: string;
     filename: string;
     pageCount: number;
+    force?: boolean;
   } | null>(null);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
   const fetchDocs = () => {
     setLoading(true);
@@ -202,15 +205,63 @@ export function DocumentsView({
                         </Button>
                         {(doc.status || "").toLowerCase() === "processing" ||
                         (activeTask?.id === doc.id && activeTask.status === "running") ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled
-                            className="h-7 text-xs font-medium border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 cursor-not-allowed"
-                          >
-                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                            Extracting...
-                          </Button>
+                          activeTask?.id === doc.id && activeTask.status === "running" ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              disabled
+                              className="h-7 text-xs font-medium border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 cursor-not-allowed"
+                            >
+                              <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                              Extracting...
+                            </Button>
+                          ) : (
+                            <div className="flex items-center gap-1.5">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                disabled={resettingId === doc.id}
+                                onClick={async () => {
+                                  setResettingId(doc.id);
+                                  try {
+                                    await api.resetDocumentProcessing(doc.id);
+                                    await fetchDocs();
+                                    if (onRefreshCounts) onRefreshCounts();
+                                  } catch (err) {
+                                    console.error("Failed to reset document processing:", err);
+                                  } finally {
+                                    setResettingId(null);
+                                  }
+                                }}
+                                className="h-7 text-xs font-medium border-rose-500/30 text-rose-500 hover:bg-rose-500/10"
+                                title="Reset stuck processing status"
+                              >
+                                {resettingId === doc.id ? (
+                                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                ) : (
+                                  <RotateCcw className="h-3 w-3 mr-1" />
+                                )}
+                                Reset
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  setProcessModalDoc({
+                                    id: doc.id,
+                                    filename: doc.filename,
+                                    pageCount: doc.page_count,
+                                    force: true,
+                                  })
+                                }
+                                className="h-7 text-xs font-medium border-primary/30 text-primary hover:bg-primary/10"
+                                title="Force re-extraction"
+                              >
+                                <Play className="h-3 w-3 mr-1 fill-primary" />
+                                Retry
+                              </Button>
+                            </div>
+                          )
                         ) : (
                           <Button
                             variant="outline"
@@ -272,7 +323,10 @@ export function DocumentsView({
               prev.map((d) => (d.id === options.documentId ? { ...d, status: "processing" } : d))
             );
             if (onStartProcess) {
-              onStartProcess(options);
+              onStartProcess({
+                ...options,
+                force: processModalDoc.force || false,
+              });
             }
           }}
           onProcessSuccess={() => {

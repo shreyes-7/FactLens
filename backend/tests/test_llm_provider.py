@@ -103,3 +103,42 @@ async def test_fallback_provider_fails_over_to_secondary():
     result = await fb.generate("Test")
     assert result == "Fallback answer"
 
+
+@pytest.mark.asyncio
+async def test_gemini_timeout_fails_fast_without_retries():
+    """Verify GeminiProvider raises RuntimeError immediately on ReadTimeout without looping through 3 retries."""
+    provider = GeminiProvider(api_key="mock_key", timeout=15.0, max_retries=3)
+
+    with patch.object(httpx.AsyncClient, "post", side_effect=httpx.ReadTimeout("Read timed out")) as mock_post:
+        with pytest.raises(RuntimeError, match="timed out"):
+            await provider.generate("Extract facts")
+
+        # Must have attempted only once, failing fast to secondary provider
+        assert mock_post.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_gemini_timeout_with_fallback_triggers_groq():
+    """Verify FallbackLLMProvider switches to Groq immediately when Gemini encounters ReadTimeout."""
+    from backend.app.providers.llm.fallback import FallbackLLMProvider
+
+    gemini = GeminiProvider(api_key="mock_gemini", timeout=15.0)
+    groq = GroqProvider(api_key="mock_groq")
+
+    with patch.object(httpx.AsyncClient, "post") as mock_post:
+        # First call (Gemini) times out; second call (Groq) succeeds
+        mock_post.side_effect = [
+            httpx.ReadTimeout("Read timed out"),
+            httpx.Response(
+                status_code=200,
+                json={"choices": [{"message": {"content": "Fast answer from Groq"}}]},
+                request=httpx.Request("POST", groq.BASE_URL),
+            ),
+        ]
+
+        fb = FallbackLLMProvider(primary=gemini, fallback=groq)
+        res = await fb.generate("Extract facts")
+
+        assert res == "Fast answer from Groq"
+        assert mock_post.call_count == 2
+

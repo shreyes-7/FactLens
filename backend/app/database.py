@@ -355,6 +355,57 @@ def update_processing_run_counts(
         conn.close()
 
 
+def cleanup_stale_processing_runs(
+    settings: Settings | None = None,
+    stale_minutes: int = 5,
+) -> int:
+    """Mark runs that have been stuck in 'PROCESSING' for longer than stale_minutes as 'FAILED'."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    query = """
+        UPDATE public.processing_runs
+        SET status = 'FAILED',
+            completed_at = NOW(),
+            error_message = 'Processing timed out or worker restarted'
+        WHERE status = 'PROCESSING'
+          AND started_at < NOW() - (%s * INTERVAL '1 minute');
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (stale_minutes,))
+            return cur.rowcount
+    except Exception as exc:
+        logger.warning("cleanup_stale_processing_runs encountered error: %s", exc)
+        return 0
+    finally:
+        conn.close()
+
+
+def reset_document_processing_status(
+    document_id: str,
+    settings: Settings | None = None,
+) -> bool:
+    """Explicitly mark any active PROCESSING runs for a document as FAILED to unblock future runs."""
+    cfg = settings or get_settings()
+    conn = get_db_connection(cfg)
+    conn.autocommit = True
+    query = """
+        UPDATE public.processing_runs
+        SET status = 'FAILED',
+            completed_at = NOW(),
+            error_message = 'Manually reset by user'
+        WHERE document_id = %s
+          AND status = 'PROCESSING';
+    """
+    try:
+        with conn.cursor() as cur:
+            cur.execute(query, (document_id,))
+            return cur.rowcount > 0
+    finally:
+        conn.close()
+
+
 def get_all_facts(
     dataset_id: str | None = None,
     settings: Settings | None = None,
@@ -732,6 +783,7 @@ def get_dataset_by_id(dataset_id: str, settings: Settings | None = None) -> dict
 def get_all_documents(dataset_id: str | None = None, settings: Settings | None = None) -> list[dict[str, Any]]:
     """Retrieve documents optionally filtered by dataset."""
     cfg = settings or get_settings()
+    cleanup_stale_processing_runs(cfg)
     conn = get_db_connection(cfg)
     query = """
         SELECT 
@@ -741,7 +793,16 @@ def get_all_documents(dataset_id: str | None = None, settings: Settings | None =
             COALESCE(d.page_count, 0) AS page_count, 
             COALESCE((d.metadata->>'file_size_bytes')::bigint, 0) AS file_size_bytes, 
             d.storage_path, 
-            COALESCE((SELECT status FROM public.processing_runs pr WHERE pr.document_id = d.id ORDER BY pr.created_at DESC LIMIT 1), 'ingested') AS status, 
+            COALESCE((
+                SELECT CASE 
+                    WHEN pr.status = 'PROCESSING' AND pr.started_at < NOW() - INTERVAL '5 minutes' THEN 'failed'
+                    ELSE LOWER(pr.status)
+                END
+                FROM public.processing_runs pr 
+                WHERE pr.document_id = d.id 
+                ORDER BY pr.started_at DESC 
+                LIMIT 1
+            ), 'ingested') AS status, 
             d.created_at
         FROM public.documents d
     """
@@ -762,6 +823,7 @@ def get_all_documents(dataset_id: str | None = None, settings: Settings | None =
 def get_document_detail(document_id: str, settings: Settings | None = None) -> dict[str, Any] | None:
     """Retrieve detailed document metadata including fact counts and processing runs."""
     cfg = settings or get_settings()
+    cleanup_stale_processing_runs(cfg)
     conn = get_db_connection(cfg)
     try:
         with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -774,7 +836,16 @@ def get_document_detail(document_id: str, settings: Settings | None = None) -> d
                     COALESCE(d.page_count, 0) AS page_count, 
                     COALESCE((d.metadata->>'file_size_bytes')::bigint, 0) AS file_size_bytes, 
                     d.storage_path, 
-                    COALESCE((SELECT status FROM public.processing_runs pr WHERE pr.document_id = d.id ORDER BY pr.created_at DESC LIMIT 1), 'ingested') AS status, 
+                    COALESCE((
+                        SELECT CASE 
+                            WHEN pr.status = 'PROCESSING' AND pr.started_at < NOW() - INTERVAL '5 minutes' THEN 'failed'
+                            ELSE LOWER(pr.status)
+                        END
+                        FROM public.processing_runs pr 
+                        WHERE pr.document_id = d.id 
+                        ORDER BY pr.started_at DESC 
+                        LIMIT 1
+                    ), 'ingested') AS status, 
                     d.created_at
                 FROM public.documents d
                 WHERE d.id = %s;

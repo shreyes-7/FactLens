@@ -19,10 +19,12 @@ from psycopg2.extras import RealDictCursor
 
 from backend.app.config import Settings, get_settings
 from backend.app.database import (
+    cleanup_stale_processing_runs,
     get_db_connection,
     get_document_pages,
     insert_chunks_batch,
     insert_facts_and_evidence,
+    reset_document_processing_status,
     update_processing_run_counts,
 )
 from backend.app.extraction.fact_extractor import FactExtractor
@@ -59,6 +61,7 @@ class ProcessingService:
         chunk_size: int = 800,
         chunk_overlap: int = 100,
         page_numbers: list[int] | None = None,
+        force: bool = False,
     ) -> dict[str, Any]:
         """
         Execute the end-to-end processing pipeline for a document using controlled chunk batching.
@@ -77,19 +80,23 @@ class ProcessingService:
         filename = doc_info.get("filename", "document.pdf")
         dataset_id = str(doc_info["dataset_id"])
 
-        # Check for concurrent processing run to avoid duplicate execution
-        active_run = self._check_active_run(str(doc_uuid))
-        if active_run:
-            logger.warning(
-                f"Document '{filename}' already has an active processing run ({active_run['id']}). Skipping concurrent execution."
-            )
-            return {
-                "run_id": active_run["id"],
-                "document_id": str(doc_uuid),
-                "filename": filename,
-                "status": "ALREADY_PROCESSING",
-                "message": "Document is already being processed.",
-            }
+        if force:
+            logger.info(f"Force re-extraction requested for '{filename}'. Clearing any stuck active runs...")
+            reset_document_processing_status(str(doc_uuid), self.settings)
+        else:
+            # Check for concurrent processing run to avoid duplicate execution
+            active_run = self._check_active_run(str(doc_uuid))
+            if active_run:
+                logger.warning(
+                    f"Document '{filename}' already has an active processing run ({active_run['id']}). Skipping concurrent execution."
+                )
+                return {
+                    "run_id": active_run["id"],
+                    "document_id": str(doc_uuid),
+                    "filename": filename,
+                    "status": "ALREADY_PROCESSING",
+                    "message": "Document is already being processed.",
+                }
 
         # Fetch document pages
         all_pages = get_document_pages(str(doc_uuid), self.settings)
@@ -281,9 +288,13 @@ class ProcessingService:
                 f"Completed processing for '{filename}': {total_chunks} chunks, {total_facts} facts, {total_rejected} rejected."
             )
 
-        except Exception as e:
+        except BaseException as e:
             logger.error(f"Processing failed for document {document_id}: {e}", exc_info=True)
-            self._finalize_processing_run(run_id, status="FAILED", error_message=str(e))
+            self._finalize_processing_run(
+                run_id,
+                status="FAILED",
+                error_message=f"{type(e).__name__}: {str(e)}" if str(e) else type(e).__name__,
+            )
             raise e
 
         return {
@@ -310,6 +321,7 @@ class ProcessingService:
 
     def _check_active_run(self, document_id: str) -> dict[str, Any] | None:
         """Check if an active processing run is currently in progress for this document."""
+        cleanup_stale_processing_runs(self.settings, stale_minutes=5)
         conn = get_db_connection(self.settings)
         try:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
@@ -317,7 +329,9 @@ class ProcessingService:
                     """
                     SELECT id, status, started_at
                     FROM public.processing_runs
-                    WHERE document_id = %s AND status = 'PROCESSING'
+                    WHERE document_id = %s 
+                      AND status = 'PROCESSING'
+                      AND started_at >= NOW() - INTERVAL '5 minutes'
                     ORDER BY started_at DESC
                     LIMIT 1;
                     """,

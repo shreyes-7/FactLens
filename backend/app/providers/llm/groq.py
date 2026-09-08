@@ -23,7 +23,7 @@ class GroqProvider(LLMProvider):
         self,
         api_key: str,
         model: str = "openai/gpt-oss-120b",
-        timeout: float = 60.0,
+        timeout: float = 45.0,
     ) -> None:
         if not api_key or not api_key.strip():
             raise ValueError("Groq API key cannot be empty.")
@@ -61,10 +61,16 @@ class GroqProvider(LLMProvider):
 
         max_retries = 3
         backoff = 3.0
+        httpx_timeout = httpx.Timeout(
+            connect=10.0,
+            read=self._timeout,
+            write=20.0,
+            pool=10.0,
+        )
 
         for attempt in range(max_retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self._timeout) as client:
+                async with httpx.AsyncClient(timeout=httpx_timeout) as client:
                     response = await client.post(self.BASE_URL, headers=headers, json=payload)
 
                     if response.status_code == 429:
@@ -113,6 +119,13 @@ class GroqProvider(LLMProvider):
                         content = content[:-3]
 
                     return content.strip()
+            except httpx.TimeoutException as exc:
+                logger.warning(
+                    f"Groq API request timed out after {self._timeout}s ({exc.__class__.__name__})."
+                )
+                raise RuntimeError(
+                    f"Groq API request timed out after {self._timeout}s: {exc.__class__.__name__}"
+                ) from None
             except httpx.RequestError as exc:
                 if attempt < max_retries:
                     await asyncio.sleep(backoff)

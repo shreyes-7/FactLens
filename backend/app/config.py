@@ -56,8 +56,14 @@ class Settings(BaseSettings):
         default=False,
         description="Enable automatic fallback between Gemini and Groq if both keys are present.",
     )
+    llm_timeout: float = Field(
+        default=45.0,
+        ge=10.0,
+        le=300.0,
+        description="HTTP timeout in seconds for LLM inference requests.",
+    )
     fact_extraction_batch_size: int = Field(
-        default=4,
+        default=2,
         ge=1,
         le=10,
         description="Number of chunks to batch together in a single LLM fact-extraction request.",
