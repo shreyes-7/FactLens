@@ -82,6 +82,12 @@ app.add_middleware(
 app.include_router(api_router)
 
 
+@app.get("/health", tags=["Health"])
+def health_check():
+    """Lightweight root health check endpoint for Render and cloud load balancers."""
+    return {"status": "ok", "app": "FactLens API"}
+
+
 @app.get("/", tags=["Root"])
 def root():
     """Welcome endpoint pointing to API documentation and system status."""
@@ -92,13 +98,16 @@ def root():
             "description": "Evidence-grounded Fact Knowledge Layer",
             "documentation": "/docs",
             "openapi": "/openapi.json",
-            "health": "/api/health",
+            "health": "/health",
+            "api_health": "/api/health",
             "endpoints": {
                 "health": "/api/health",
+                "root_health": "/health",
                 "datasets": "/api/datasets",
                 "documents": "/api/documents",
                 "facts": "/api/facts",
                 "relationships": "/api/relationships",
+                "comparisons": "/api/comparisons",
                 "four_cases": "/api/cases/four-cases",
             },
         }

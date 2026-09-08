@@ -21,9 +21,12 @@ import {
   DocumentComparisonResponse,
 } from "./types";
 
-const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
+const rawEnvUrl = (import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || "").trim().replace(/\/+$/, "");
+const BASE_URL = rawEnvUrl
+  ? (rawEnvUrl.endsWith("/api") ? rawEnvUrl : `${rawEnvUrl}/api`)
+  : "/api";
 
-class ApiError extends Error {
+export class ApiError extends Error {
   status: number;
   data: any;
 
@@ -37,16 +40,27 @@ class ApiError extends Error {
 
 async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const url = `${BASE_URL}${endpoint}`;
-  const response = await fetch(url, {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...options.headers,
-    },
-  });
+  let response: Response;
+
+  try {
+    response = await fetch(url, {
+      ...options,
+      headers: {
+        Accept: "application/json",
+        ...options.headers,
+      },
+    });
+  } catch (err: any) {
+    // Network errors (e.g., CORS failure, connection refused, or Render instance spin-up timeout)
+    const isColdStartHint = "Unable to reach the server. If using Render free tier, the instance may be spinning up from sleep (takes ~45-60s). Please retry shortly.";
+    throw new ApiError(err?.message ? `${isColdStartHint} (${err.message})` : isColdStartHint, 0);
+  }
 
   if (!response.ok) {
     let errorDetail = `Request failed with status ${response.status}`;
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      errorDetail = `Backend service unavailable (${response.status}). If hosted on Render free tier, it may be waking up. Please retry in 30 seconds.`;
+    }
     try {
       const errJson = await response.json();
       errorDetail = errJson.detail || errJson.message || errorDetail;

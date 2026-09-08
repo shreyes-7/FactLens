@@ -101,16 +101,33 @@ class Settings(BaseSettings):
         default=True,
         description="Inject security response headers (nosniff, DENY, etc.).",
     )
+    frontend_url: str | None = Field(
+        default=None,
+        description="Public frontend URL on Vercel or custom domain (e.g. https://factlens.vercel.app).",
+    )
     allowed_cors_origins: list[str] = Field(
         default_factory=lambda: [
             "http://localhost:5173",
             "http://localhost:3000",
             "http://127.0.0.1:5173",
             "http://127.0.0.1:3000",
-            "*",
         ],
         description="Allowed CORS origin URLs.",
     )
+
+    @field_validator("allowed_cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: object) -> object:
+        if isinstance(v, str):
+            clean = v.strip()
+            if clean.startswith("[") and clean.endswith("]"):
+                try:
+                    import json
+                    return json.loads(clean)
+                except Exception:
+                    pass
+            return [origin.strip() for origin in clean.split(",") if origin.strip()]
+        return v
 
     # Processing Defaults
     max_file_size_mb: int = 50
@@ -152,6 +169,13 @@ class Settings(BaseSettings):
                 raise ValueError(
                     f"EMBEDDING_DIMENSION must match model output (expected 384 for {self.embedding_model})."
                 )
+
+        # Merge frontend_url into allowed_cors_origins if provided
+        if self.frontend_url:
+            for url in self.frontend_url.split(","):
+                clean = url.strip().rstrip("/")
+                if clean and clean not in self.allowed_cors_origins:
+                    self.allowed_cors_origins.append(clean)
 
         return self
 

@@ -95,3 +95,17 @@ def test_secrets_never_exposed_in_repr():
     assert "super_secret_groq_key_12345" not in rep
     assert "super_secret_jina_key_67890" not in rep
     assert "***" in rep
+
+
+def test_cors_origins_and_frontend_url_parsing():
+    """Verify comma-separated CORS origins and FRONTEND_URL integration."""
+    settings = Settings(
+        groq_api_key="gsk_key",
+        jina_api_key="jina_key",
+        frontend_url="https://factlens.vercel.app",
+        allowed_cors_origins="https://custom.domain.com, http://localhost:3000",
+    )
+    assert "https://factlens.vercel.app" in settings.allowed_cors_origins
+    assert "https://custom.domain.com" in settings.allowed_cors_origins
+    assert "http://localhost:3000" in settings.allowed_cors_origins
+

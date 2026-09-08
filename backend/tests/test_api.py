@@ -42,6 +42,16 @@ async def test_health_endpoint(client: httpx.AsyncClient):
 
 
 @pytest.mark.asyncio
+async def test_render_health_check(client: httpx.AsyncClient):
+    """Verify GET /health lightweight health check for Render."""
+    response = await client.get("/health")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ok"
+    assert data["app"] == "FactLens API"
+
+
+@pytest.mark.asyncio
 async def test_datasets_list(client: httpx.AsyncClient):
     """Verify GET /api/datasets returns a list of datasets."""
     response = await client.get("/api/datasets")
