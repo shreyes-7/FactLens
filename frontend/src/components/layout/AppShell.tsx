@@ -7,6 +7,7 @@ import { OverviewView } from "@/views/OverviewView";
 import { DocumentsView } from "@/views/DocumentsView";
 import { FactsView } from "@/views/FactsView";
 import { RelationshipsView } from "@/views/RelationshipsView";
+import { CompareDocumentsView } from "@/views/CompareDocumentsView";
 import { CasesView } from "@/views/CasesView";
 import { DocumentUploadModal } from "@/components/documents/DocumentUploadModal";
 import { api } from "@/api/client";
@@ -180,6 +181,7 @@ export function AppShell() {
               datasetId={currentDatasetId}
               onRefreshCounts={fetchDatasets}
               refreshTrigger={refreshTrigger}
+              activeTask={activeTask}
               onStartProcess={handleStartExtractionTask}
             />
           )}
@@ -197,6 +199,13 @@ export function AppShell() {
               datasetId={currentDatasetId}
               onInspectFact={handleInspectFact}
               refreshTrigger={refreshTrigger}
+            />
+          )}
+
+          {activeView === "compare" && (
+            <CompareDocumentsView
+              datasetId={currentDatasetId}
+              onInspectFact={handleInspectFact}
             />
           )}
 

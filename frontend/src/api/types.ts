@@ -116,6 +116,8 @@ export interface FactWithEvidenceResponse {
   status?: string | null;
   quote?: string | null;
   confidence_score?: number | null;
+  confidence?: number | null;
+  confidence_level?: string | null;
   evidence: EvidenceItem[];
   created_at?: string | null;
 }
@@ -180,3 +182,122 @@ export interface FourCasesResponse {
   dataset_name: string;
   cases: CaseDemonstration[];
 }
+
+// --- FactLens 2.0: Advanced Intelligence Types ---
+
+export interface ConfidenceSignal {
+  signal: string;
+  impact: number;
+  status: "pass" | "warn" | "fail";
+  description: string;
+}
+
+export interface FactConfidenceResponse {
+  fact_id: string;
+  score: number;
+  level: "HIGH" | "MEDIUM" | "LOW";
+  level_label: string;
+  signals: ConfidenceSignal[];
+  positive_count: number;
+  negative_count: number;
+}
+
+export interface InvestigationChecks {
+  entity_match: boolean;
+  predicate_match: boolean;
+  period_match: boolean;
+  currency_match: boolean;
+  unit_match: boolean;
+  scope_match: boolean;
+  same_document: boolean;
+  same_page: boolean;
+}
+
+export interface InvestigationResponse {
+  relationship_id?: string | null;
+  relationship: string;
+  verdict: string;
+  verdict_type: string;
+  explanation: string;
+  variance_percent?: number | null;
+  absolute_difference?: number | null;
+  checks: InvestigationChecks;
+  confidence: number;
+  review_required: boolean;
+  metric_name: string;
+  value_a_display: string;
+  value_b_display: string;
+  source_a: {
+    document: string;
+    page: number | null;
+    value: string;
+    raw_claim: string;
+    quote?: string | null;
+    scope?: string | null;
+    period?: string | null;
+    unit?: string | null;
+    fact_id: string;
+  };
+  source_b: {
+    document: string;
+    page: number | null;
+    value: string;
+    raw_claim: string;
+    quote?: string | null;
+    scope?: string | null;
+    period?: string | null;
+    unit?: string | null;
+    fact_id: string;
+  };
+}
+
+export interface DocumentRef {
+  id: string;
+  filename: string;
+  total_facts: number;
+}
+
+export interface MetricValuePoint {
+  document_id: string;
+  document_filename: string;
+  fact_id: string;
+  raw_value: string;
+  normalized_value?: number | null;
+  unit?: string | null;
+  period?: string | null;
+  scope?: string | null;
+  page_number?: number | null;
+  evidence_quote?: string | null;
+}
+
+export interface MetricComparisonItem {
+  metric_id: string;
+  subject: string;
+  predicate: string;
+  unit?: string | null;
+  scope?: string | null;
+  category: "INCREASED" | "DECREASED" | "UNCHANGED" | "ADDED" | "NOT_FOUND" | "CONTEXT_CHANGED";
+  change_label: string;
+  variance_percent?: number | null;
+  absolute_difference?: number | null;
+  doc_a_value?: MetricValuePoint | null;
+  doc_b_value?: MetricValuePoint | null;
+  timeline: (MetricValuePoint | null)[];
+}
+
+export interface DocumentComparisonSummary {
+  total_metrics_compared: number;
+  increased_count: number;
+  decreased_count: number;
+  unchanged_count: number;
+  added_count: number;
+  not_found_count: number;
+  context_changed_count: number;
+}
+
+export interface DocumentComparisonResponse {
+  documents: DocumentRef[];
+  summary: DocumentComparisonSummary;
+  metrics: MetricComparisonItem[];
+}
+

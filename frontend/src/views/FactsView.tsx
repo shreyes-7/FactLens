@@ -4,7 +4,7 @@ import { api } from "@/api/client";
 import { FactWithEvidenceResponse } from "@/api/types";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { formatConfidence, formatNormalizedValue } from "@/lib/formatters";
+import { formatNormalizedValue } from "@/lib/formatters";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { EvidenceInspector } from "@/components/facts/EvidenceInspector";
@@ -21,6 +21,7 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("ALL");
+  const [confidenceFilter, setConfidenceFilter] = useState<string>("ALL");
   const [selectedFact, setSelectedFact] = useState<FactWithEvidenceResponse | null>(null);
 
   const fetchFacts = () => {
@@ -29,7 +30,7 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
       datasetId,
       category: categoryFilter !== "ALL" ? categoryFilter : undefined,
       search: search.trim() || undefined,
-      limit: 100,
+      limit: 150,
     })
       .then((res) => {
         setFacts(res.facts || []);
@@ -42,6 +43,15 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
       .catch((err) => console.error("Failed to load facts:", err))
       .finally(() => setLoading(false));
   };
+
+  const displayedFacts = facts.filter((fact) => {
+    if (confidenceFilter === "ALL") return true;
+    const score = fact.confidence ?? (fact.confidence_score ? Math.round(fact.confidence_score * 100) : 85);
+    if (confidenceFilter === "HIGH") return score >= 90;
+    if (confidenceFilter === "MEDIUM") return score >= 70 && score < 90;
+    if (confidenceFilter === "LOW") return score < 70;
+    return true;
+  });
 
   useEffect(() => {
     fetchFacts();
@@ -99,22 +109,46 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
           </Button>
         </form>
 
-        {/* Category Pills */}
-        <div className="flex items-center gap-1.5">
-          <span className="text-[11px] font-medium text-muted-foreground mr-1">Category:</span>
-          {["ALL", "NUMERICAL", "SEMANTIC"].map((cat) => (
-            <button
-              key={cat}
-              onClick={() => setCategoryFilter(cat)}
-              className={`px-3 py-1 rounded-lg text-xs font-medium transition-all ${
-                categoryFilter === cat
-                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
-                  : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
-              }`}
-            >
-              {cat === "ALL" ? "All Facts" : cat.charAt(0) + cat.slice(1).toLowerCase()}
-            </button>
-          ))}
+        {/* Category & Confidence Filter Pills */}
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-medium text-muted-foreground mr-1">Category:</span>
+            {["ALL", "NUMERICAL", "SEMANTIC"].map((cat) => (
+              <button
+                key={cat}
+                onClick={() => setCategoryFilter(cat)}
+                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                  categoryFilter === cat
+                    ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                    : "bg-muted text-muted-foreground hover:text-foreground hover:bg-muted/80"
+                }`}
+              >
+                {cat === "ALL" ? "All Facts" : cat.charAt(0) + cat.slice(1).toLowerCase()}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex items-center gap-1.5 border-l border-border/60 pl-3">
+            <span className="text-[11px] font-medium text-muted-foreground mr-1">Confidence:</span>
+            {[
+              { id: "ALL", label: "All" },
+              { id: "HIGH", label: "High (≥90%)", color: "text-emerald-400" },
+              { id: "MEDIUM", label: "Medium", color: "text-amber-400" },
+              { id: "LOW", label: "Needs Review", color: "text-rose-400" },
+            ].map((lvl) => (
+              <button
+                key={lvl.id}
+                onClick={() => setConfidenceFilter(lvl.id)}
+                className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all ${
+                  confidenceFilter === lvl.id
+                    ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                    : "bg-muted/60 text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                <span className={confidenceFilter === lvl.id ? "" : lvl.color}>{lvl.label}</span>
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -127,7 +161,7 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
             <Skeleton className="h-10 w-full" />
             <Skeleton className="h-10 w-full" />
           </div>
-        ) : facts.length > 0 ? (
+        ) : displayedFacts.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs table-fixed">
               <thead className="bg-muted/50 border-b border-border/70 text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
@@ -137,13 +171,14 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
                   <th className="py-3 px-4 w-[140px]">Normalized</th>
                   <th className="py-3 px-4 w-[130px]">Period & Scope</th>
                   <th className="py-3 px-4 w-[160px]">Source PDF</th>
-                  <th className="py-3 px-4 w-[100px]">Confidence</th>
+                  <th className="py-3 px-4 w-[110px]">Confidence</th>
                   <th className="py-3 px-4 w-[120px] text-right">Evidence</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/40">
-                {facts.map((fact) => {
+                {displayedFacts.map((fact) => {
                   const isNumerical = fact.category === "NUMERICAL" || !!fact.normalized_value;
+                  const confScore = fact.confidence ?? (fact.confidence_score ? Math.round(fact.confidence_score * 100) : 85);
                   return (
                     <tr
                       key={fact.id}
@@ -247,10 +282,31 @@ export function FactsView({ datasetId, initialFactId, refreshTrigger }: FactsVie
                       {/* Confidence Score */}
                       <td className="py-3 px-4 align-top">
                         <div className="flex items-center gap-1.5">
-                          <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
-                          <span className="font-mono text-xs font-semibold text-emerald-500">
-                            {formatConfidence(fact.confidence_score)}
-                          </span>
+                          <span
+                            className={`h-2 w-2 rounded-full shrink-0 ${
+                              confScore >= 90
+                                ? "bg-emerald-500"
+                                : confScore >= 70
+                                ? "bg-amber-500"
+                                : "bg-rose-500"
+                            }`}
+                          />
+                          <div className="flex flex-col">
+                            <span className="font-mono text-xs font-bold text-foreground">
+                              {confScore}%
+                            </span>
+                            <span
+                              className={`text-[9px] font-semibold uppercase ${
+                                confScore >= 90
+                                  ? "text-emerald-500"
+                                  : confScore >= 70
+                                  ? "text-amber-500"
+                                  : "text-rose-400"
+                              }`}
+                            >
+                              {confScore >= 90 ? "High" : confScore >= 70 ? "Medium" : "Review"}
+                            </span>
+                          </div>
                         </div>
                       </td>
 

@@ -1004,6 +1004,7 @@ def get_relationships_detailed(
     relationship_type: str | None = None,
     min_confidence: float = 0.0,
     cross_document_only: bool = False,
+    same_document_only: bool = False,
     exclude_same_page: bool = True,
     settings: Settings | None = None,
 ) -> list[dict[str, Any]]:
@@ -1076,6 +1077,14 @@ def get_relationships_detailed(
         params.append(min_confidence)
     if cross_document_only:
         where_clauses.append("fa.document_id != fb.document_id")
+    elif same_document_only:
+        where_clauses.append("fa.document_id = fb.document_id")
+        if exclude_same_page:
+            where_clauses.append("""(
+                COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) != COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int)
+                OR COALESCE(dpa.pdf_page_number, (fa.metadata->>'page_number')::int) IS NULL
+                OR COALESCE(dpb.pdf_page_number, (fb.metadata->>'page_number')::int) IS NULL
+            )""")
     elif exclude_same_page:
         where_clauses.append("""(
             fa.document_id != fb.document_id 

@@ -16,6 +16,9 @@ import {
   RelationshipsListResponse,
   FourCasesResponse,
   RelationshipType,
+  FactConfidenceResponse,
+  InvestigationResponse,
+  DocumentComparisonResponse,
 } from "./types";
 
 const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
@@ -131,12 +134,16 @@ export const api = {
   getFactDetail: (id: string): Promise<FactWithEvidenceResponse> =>
     request<FactWithEvidenceResponse>(`/facts/${id}`),
 
+  getFactConfidence: (id: string): Promise<FactConfidenceResponse> =>
+    request<FactConfidenceResponse>(`/facts/${id}/confidence`),
+
   // 5. Relationships
   getRelationships: (params: {
     datasetId?: string;
     type?: RelationshipType;
     minConfidence?: number;
     crossDocumentOnly?: boolean;
+    sameDocumentOnly?: boolean;
     excludeSamePage?: boolean;
   } = {}): Promise<RelationshipsListResponse> => {
     const sp = new URLSearchParams();
@@ -144,11 +151,15 @@ export const api = {
     if (params.type) sp.set("type", params.type);
     if (params.minConfidence) sp.set("min_confidence", String(params.minConfidence));
     if (params.crossDocumentOnly !== undefined) sp.set("cross_document_only", String(params.crossDocumentOnly));
+    if (params.sameDocumentOnly !== undefined) sp.set("same_document_only", String(params.sameDocumentOnly));
     if (params.excludeSamePage !== undefined) sp.set("exclude_same_page", String(params.excludeSamePage));
 
     const qs = sp.toString() ? `?${sp.toString()}` : "";
     return request<RelationshipsListResponse>(`/relationships${qs}`);
   },
+
+  getRelationshipInvestigation: (id: string): Promise<InvestigationResponse> =>
+    request<InvestigationResponse>(`/relationships/${id}/investigate`),
 
   triggerReasoning: (
     datasetId: string,
@@ -160,6 +171,14 @@ export const api = {
       { method: "POST" }
     ),
 
-  // 6. Core Assignment Cases
+  // 6. Cross-Document Comparisons ("What Changed?")
+  compareDocuments: (documentIds: string[]): Promise<DocumentComparisonResponse> =>
+    request<DocumentComparisonResponse>("/comparisons", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ document_ids: documentIds }),
+    }),
+
+  // 7. Core Assignment Cases
   getFourCases: (): Promise<FourCasesResponse> => request<FourCasesResponse>("/cases/four-cases"),
 };

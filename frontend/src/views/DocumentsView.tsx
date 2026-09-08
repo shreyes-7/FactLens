@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { FileText, Upload, Play, Info, Search, RefreshCw } from "lucide-react";
+import { FileText, Upload, Play, Info, Search, RefreshCw, Loader2 } from "lucide-react";
 import { api } from "@/api/client";
 import { DocumentResponse } from "@/api/types";
 import { Button } from "@/components/ui/button";
@@ -10,12 +10,14 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 import { DocumentDetailDrawer } from "@/components/documents/DocumentDetailDrawer";
 import { ProcessOptionsModal } from "@/components/documents/ProcessOptionsModal";
+import { ActiveTask } from "@/components/shared/ActiveTaskBanner";
 
 interface DocumentsViewProps {
   onOpenUpload: () => void;
   datasetId?: string;
   onRefreshCounts?: () => void;
   refreshTrigger?: number;
+  activeTask?: ActiveTask | null;
   onStartProcess?: (options: {
     documentId: string;
     filename: string;
@@ -28,6 +30,7 @@ export function DocumentsView({
   datasetId,
   onRefreshCounts,
   refreshTrigger,
+  activeTask,
   onStartProcess,
 }: DocumentsViewProps) {
   const [documents, setDocuments] = useState<DocumentResponse[]>([]);
@@ -54,14 +57,23 @@ export function DocumentsView({
     fetchDocs();
   }, [datasetId, refreshTrigger]);
 
-  // Active status polling while any document is in processing or pending status
+  // When active task completes, re-fetch documents to show updated status and counts
   useEffect(() => {
-    const hasActiveProcessing = documents.some((d) => {
-      const s = (d.status || "").toLowerCase();
-      return s === "processing" || s === "pending" || s === "queued";
-    });
+    if (activeTask?.status === "completed") {
+      fetchDocs();
+    }
+  }, [activeTask?.status]);
 
-    const pollInterval = hasActiveProcessing ? 2500 : 8000;
+  // Active status polling while any document is in processing or pending status or active task is running
+  useEffect(() => {
+    const hasActiveProcessing =
+      (activeTask && activeTask.status === "running") ||
+      documents.some((d) => {
+        const s = (d.status || "").toLowerCase();
+        return s === "processing" || s === "pending" || s === "queued";
+      });
+
+    const pollInterval = hasActiveProcessing ? 2000 : 8000;
 
     const timer = setInterval(() => {
       api.getDocuments(datasetId)
@@ -80,7 +92,7 @@ export function DocumentsView({
     }, pollInterval);
 
     return () => clearInterval(timer);
-  }, [documents, datasetId, onRefreshCounts]);
+  }, [documents, datasetId, onRefreshCounts, activeTask]);
 
   const filteredDocs = documents.filter((doc) =>
     doc.filename.toLowerCase().includes(searchTerm.toLowerCase())
@@ -168,7 +180,13 @@ export function DocumentsView({
                       {formatDate(doc.created_at)}
                     </td>
                     <td className="py-3 px-4">
-                      <ProcessingStatusBadge status={doc.status} />
+                      <ProcessingStatusBadge
+                        status={
+                          activeTask?.id === doc.id && activeTask.status === "running"
+                            ? "processing"
+                            : doc.status
+                        }
+                      />
                     </td>
                     <td className="py-3 px-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex items-center justify-end gap-1.5">
@@ -182,21 +200,34 @@ export function DocumentsView({
                           <Info className="h-3.5 w-3.5 mr-1" />
                           Details
                         </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() =>
-                            setProcessModalDoc({
-                              id: doc.id,
-                              filename: doc.filename,
-                              pageCount: doc.page_count,
-                            })
-                          }
-                          className="h-7 text-xs font-medium border-primary/30 text-primary hover:bg-primary/10"
-                        >
-                          <Play className="h-3 w-3 mr-1 fill-primary" />
-                          Extract Facts
-                        </Button>
+                        {(doc.status || "").toLowerCase() === "processing" ||
+                        (activeTask?.id === doc.id && activeTask.status === "running") ? (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled
+                            className="h-7 text-xs font-medium border-amber-500/30 text-amber-600 dark:text-amber-400 bg-amber-500/10 cursor-not-allowed"
+                          >
+                            <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                            Extracting...
+                          </Button>
+                        ) : (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() =>
+                              setProcessModalDoc({
+                                id: doc.id,
+                                filename: doc.filename,
+                                pageCount: doc.page_count,
+                              })
+                            }
+                            className="h-7 text-xs font-medium border-primary/30 text-primary hover:bg-primary/10"
+                          >
+                            <Play className="h-3 w-3 mr-1 fill-primary" />
+                            Extract Facts
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -235,7 +266,15 @@ export function DocumentsView({
           documentId={processModalDoc.id}
           filename={processModalDoc.filename}
           pageCount={processModalDoc.pageCount}
-          onStartProcess={onStartProcess}
+          onStartProcess={(options) => {
+            // Optimistically update document status in UI
+            setDocuments((prev) =>
+              prev.map((d) => (d.id === options.documentId ? { ...d, status: "processing" } : d))
+            );
+            if (onStartProcess) {
+              onStartProcess(options);
+            }
+          }}
           onProcessSuccess={() => {
             fetchDocs();
             if (onRefreshCounts) onRefreshCounts();

@@ -21,9 +21,10 @@ import { Button } from "@/components/ui/button";
 interface ComparisonCardProps {
   relationship: RelationshipWithDetailsResponse;
   onInspectFact?: (factId: string) => void;
+  onInvestigate?: (relationship: RelationshipWithDetailsResponse) => void;
 }
 
-export function ComparisonCard({ relationship, onInspectFact }: ComparisonCardProps) {
+export function ComparisonCard({ relationship, onInspectFact, onInvestigate }: ComparisonCardProps) {
   const {
     fact_a,
     fact_b,
@@ -161,6 +162,18 @@ export function ComparisonCard({ relationship, onInspectFact }: ComparisonCardPr
             <Sparkles className="h-3 w-3 text-primary" />
             <span>{formatConfidence(confidence)} Confidence</span>
           </div>
+          {onInvestigate && (
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => onInvestigate(relationship)}
+              className="h-7 px-2.5 text-xs font-semibold text-primary border-primary/30 hover:bg-primary/10 shadow-sm"
+              title="Open Contradiction Investigator for deterministic multi-factor breakdown"
+            >
+              <Scale className="h-3 w-3 mr-1" />
+              Investigate
+            </Button>
+          )}
         </div>
       </div>
 

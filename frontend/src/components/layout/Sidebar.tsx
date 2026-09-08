@@ -3,6 +3,7 @@ import {
   FileText,
   Search,
   GitCompare,
+  ArrowRightLeft,
   Award,
   BarChart3,
   Sun,
@@ -14,7 +15,7 @@ import { api } from "@/api/client";
 import { HealthResponse } from "@/api/types";
 import { Button } from "@/components/ui/button";
 
-export type NavItem = "overview" | "documents" | "facts" | "relationships" | "cases";
+export type NavItem = "overview" | "documents" | "facts" | "compare" | "relationships" | "cases";
 
 interface SidebarProps {
   activeView: NavItem;
@@ -61,6 +62,13 @@ export function Sidebar({
       label: "Fact Explorer",
       icon: Search,
       count: factCount,
+    },
+    {
+      id: "compare" as NavItem,
+      label: "Compare Documents",
+      icon: ArrowRightLeft,
+      count: null,
+      badge: "What Changed?",
     },
     {
       id: "relationships" as NavItem,

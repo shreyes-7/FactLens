@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ComparisonCard } from "@/components/relationships/ComparisonCard";
 import { EvidenceInspector } from "@/components/facts/EvidenceInspector";
+import { InvestigationDrawer } from "@/components/relationships/InvestigationDrawer";
 import { Skeleton } from "@/components/ui/skeleton";
 import { EmptyState } from "@/components/shared/EmptyState";
 
@@ -33,9 +34,12 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
   const [loading, setLoading] = useState(true);
   const [filterType, setFilterType] = useState<string>("ALL");
   const [minConfidence, setMinConfidence] = useState<number>(0.0);
-  const [crossDocOnly, setCrossDocOnly] = useState<boolean>(true);
+  const [scopeFilter, setScopeFilter] = useState<"cross" | "same" | "all">("cross");
   const [searchQuery, setSearchQuery] = useState<string>("");
   const [isReasoning, setIsReasoning] = useState(false);
+
+  // In-place Contradiction Investigator State
+  const [investigateRel, setInvestigateRel] = useState<RelationshipWithDetailsResponse | null>(null);
 
   // In-place Fact Evidence Inspector State (no redirect to other views)
   const [inspectFact, setInspectFact] = useState<FactWithEvidenceResponse | null>(null);
@@ -43,10 +47,10 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
 
   const fetchRelationships = () => {
     setLoading(true);
-    // Fetch ALL relationships for the dataset so category counts are accurate across all tabs
+    // Fetch all relationships with excludeSamePage so all tabs have complete data
     api.getRelationships({
       datasetId,
-      crossDocumentOnly: crossDocOnly,
+      crossDocumentOnly: false,
       excludeSamePage: true,
     })
       .then((res) => setAllRelationships(res.relationships || []))
@@ -56,7 +60,7 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
 
   useEffect(() => {
     fetchRelationships();
-  }, [datasetId, crossDocOnly, refreshTrigger]);
+  }, [datasetId, refreshTrigger]);
 
   const handleRunReasoning = async () => {
     if (!datasetId) return;
@@ -84,20 +88,40 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
     }
   };
 
-  // Calculate true counts across ALL relationships for tab badges
+  // Calculate exact counts for scope toggle buttons
+  const scopeCounts = useMemo(() => {
+    const cross = allRelationships.filter(
+      (r) => r.fact_a.document_filename !== r.fact_b.document_filename
+    ).length;
+    const same = allRelationships.filter(
+      (r) => r.fact_a.document_filename === r.fact_b.document_filename
+    ).length;
+    return { cross, same, all: allRelationships.length };
+  }, [allRelationships]);
+
+  // Calculate true counts across relationships conforming to current scopeFilter
+  const relationshipsInScope = useMemo(() => {
+    return allRelationships.filter((rel) => {
+      const isCross = rel.fact_a.document_filename !== rel.fact_b.document_filename;
+      if (scopeFilter === "cross") return isCross;
+      if (scopeFilter === "same") return !isCross;
+      return true;
+    });
+  }, [allRelationships, scopeFilter]);
+
   const stats = useMemo(() => {
     return {
-      total: allRelationships.length,
-      corroborates: allRelationships.filter((r) => r.relationship_type === "CORROBORATES").length,
-      contradicts: allRelationships.filter((r) => r.relationship_type === "CONTRADICTS").length,
-      contextual: allRelationships.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length,
-      related: allRelationships.filter((r) => r.relationship_type === "RELATED").length,
+      total: relationshipsInScope.length,
+      corroborates: relationshipsInScope.filter((r) => r.relationship_type === "CORROBORATES").length,
+      contradicts: relationshipsInScope.filter((r) => r.relationship_type === "CONTRADICTS").length,
+      contextual: relationshipsInScope.filter((r) => r.relationship_type === "CONTEXTUAL_DIFFERENCE").length,
+      related: relationshipsInScope.filter((r) => r.relationship_type === "RELATED").length,
     };
-  }, [allRelationships]);
+  }, [relationshipsInScope]);
 
   // Client-side filtering by relationship_type, confidence, and search query
   const filteredRelationships = useMemo(() => {
-    return allRelationships.filter((rel) => {
+    return relationshipsInScope.filter((rel) => {
       // 1. Filter by relationship type
       if (filterType !== "ALL" && rel.relationship_type !== filterType) {
         return false;
@@ -136,7 +160,7 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
 
       return true;
     });
-  }, [allRelationships, filterType, minConfidence, searchQuery]);
+  }, [relationshipsInScope, filterType, minConfidence, searchQuery]);
 
   const filterOptions = [
     { id: "ALL", label: "All Comparisons", icon: FileCheck2, count: stats.total, color: "text-foreground" },
@@ -190,9 +214,12 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
             <span>Total Pairs</span>
             <Scale className="h-3.5 w-3.5 text-primary" />
           </div>
-          <div className="text-2xl font-bold font-mono text-foreground">{stats.total}</div>
           <div className="text-[10px] text-muted-foreground">
-            {crossDocOnly ? "Cross-document only" : "All relationships"}
+            {scopeFilter === "cross"
+              ? "Cross-document only"
+              : scopeFilter === "same"
+              ? "Same-document only"
+              : "All relationships"}
           </div>
         </div>
 
@@ -228,28 +255,38 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
       <div className="p-3.5 rounded-xl border border-border bg-card/80 space-y-3 shadow-sm">
         {/* Top row: Scope Switch & Search Bar */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          {/* Scope Toggle */}
+          {/* Scope Toggle: Cross-Document vs Same-Document vs All */}
           <div className="flex items-center p-1 rounded-lg bg-muted/70 border border-border/60 text-xs">
             <button
-              onClick={() => setCrossDocOnly(true)}
+              onClick={() => setScopeFilter("cross")}
               className={`px-3 py-1 rounded-md font-medium transition-all flex items-center gap-1.5 ${
-                crossDocOnly
+                scopeFilter === "cross"
                   ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
               <Scale className="h-3.5 w-3.5" />
-              <span>Cross-Document Only (Recommended)</span>
+              <span>Cross-Document ({scopeCounts.cross})</span>
             </button>
             <button
-              onClick={() => setCrossDocOnly(false)}
+              onClick={() => setScopeFilter("same")}
               className={`px-3 py-1 rounded-md font-medium transition-all ${
-                !crossDocOnly
+                scopeFilter === "same"
                   ? "bg-primary text-primary-foreground font-semibold shadow-sm"
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              <span>Include Same-Document</span>
+              <span>Same-Document ({scopeCounts.same})</span>
+            </button>
+            <button
+              onClick={() => setScopeFilter("all")}
+              className={`px-2.5 py-1 rounded-md font-medium transition-all ${
+                scopeFilter === "all"
+                  ? "bg-primary text-primary-foreground font-semibold shadow-sm"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <span>All ({scopeCounts.all})</span>
             </button>
           </div>
 
@@ -330,7 +367,7 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
             {filteredRelationships.length === 1 ? "" : "s"}
             {searchQuery && ` matching "${searchQuery}"`}
           </span>
-          {crossDocOnly && (
+          {scopeFilter === "cross" && (
             <span className="text-[11px] text-primary/90 flex items-center gap-1">
               <Scale className="h-3 w-3" />
               Trivial same-page table items excluded
@@ -350,6 +387,7 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
               key={rel.id}
               relationship={rel}
               onInspectFact={handleInspectFactInDrawer}
+              onInvestigate={(r) => setInvestigateRel(r)}
             />
           ))
         ) : (
@@ -363,6 +401,14 @@ export function RelationshipsView({ datasetId, refreshTrigger }: RelationshipsVi
           />
         )}
       </div>
+
+      {/* In-Place Contradiction Investigator Drawer */}
+      <InvestigationDrawer
+        relationship={investigateRel}
+        isOpen={!!investigateRel}
+        onClose={() => setInvestigateRel(null)}
+        onInspectFact={handleInspectFactInDrawer}
+      />
 
       {/* In-Place Slide-Over Evidence Inspector Drawer */}
       <EvidenceInspector

@@ -121,6 +121,8 @@ class FactWithEvidenceResponse(BaseModel):
     status: str | None = None
     quote: str | None = None
     confidence_score: float | None = 1.0
+    confidence: int | None = None
+    confidence_level: str | None = None
     evidence: list[EvidenceItem] = []
     created_at: datetime | None = None
 
@@ -190,3 +192,102 @@ class FourCasesResponse(BaseModel):
     title: str = "FactLens Core Assignment Evaluation Cases"
     dataset_name: str
     cases: list[CaseDemonstration]
+
+
+# --- FactLens 2.0: Advanced Intelligence Feature Schemas ---
+
+class ConfidenceSignalSchema(BaseModel):
+    signal: str
+    impact: int
+    status: str
+    description: str
+
+
+class FactConfidenceResponse(BaseModel):
+    fact_id: UUID
+    score: int
+    level: str
+    level_label: str
+    signals: list[ConfidenceSignalSchema]
+    positive_count: int
+    negative_count: int
+
+
+class InvestigationChecksSchema(BaseModel):
+    entity_match: bool
+    predicate_match: bool
+    period_match: bool
+    currency_match: bool
+    unit_match: bool
+    scope_match: bool
+    same_document: bool
+    same_page: bool
+
+
+class InvestigationResponse(BaseModel):
+    relationship_id: UUID | None = None
+    relationship: str
+    verdict: str
+    verdict_type: str
+    explanation: str
+    variance_percent: float | None = None
+    absolute_difference: float | None = None
+    checks: InvestigationChecksSchema
+    confidence: int
+    review_required: bool
+    metric_name: str
+    value_a_display: str
+    value_b_display: str
+    source_a: dict[str, Any]
+    source_b: dict[str, Any]
+
+
+class DocumentRefSchema(BaseModel):
+    id: str
+    filename: str
+    total_facts: int = 0
+
+
+class MetricValuePointSchema(BaseModel):
+    document_id: str
+    document_filename: str
+    fact_id: str
+    raw_value: str
+    normalized_value: float | None = None
+    unit: str | None = None
+    period: str | None = None
+    scope: str | None = None
+    page_number: int | None = None
+    evidence_quote: str | None = None
+
+
+class MetricComparisonItemSchema(BaseModel):
+    metric_id: str
+    subject: str
+    predicate: str
+    unit: str | None = None
+    scope: str | None = None
+    category: str
+    change_label: str
+    variance_percent: float | None = None
+    absolute_difference: float | None = None
+    doc_a_value: MetricValuePointSchema | None = None
+    doc_b_value: MetricValuePointSchema | None = None
+    timeline: list[MetricValuePointSchema | None] = []
+
+
+class DocumentComparisonSummarySchema(BaseModel):
+    total_metrics_compared: int
+    increased_count: int
+    decreased_count: int
+    unchanged_count: int
+    added_count: int
+    not_found_count: int
+    context_changed_count: int
+
+
+class DocumentComparisonResponse(BaseModel):
+    documents: list[DocumentRefSchema]
+    summary: DocumentComparisonSummarySchema
+    metrics: list[MetricComparisonItemSchema]
+
